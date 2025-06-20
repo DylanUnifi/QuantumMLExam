@@ -1,0 +1,7 @@
+seed: 42
+C: 1.0
+gamma: scale
+kernel: rbf
+optimize: false
+method: fidelity  # ou qks
+dataset: mnist

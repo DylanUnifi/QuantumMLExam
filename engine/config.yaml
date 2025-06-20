@@ -1,9 +1,9 @@
 # config.yaml
 version: "2.0"
-model_type: "mlp"  # Options: mlp, cnn, hybrid_qcnn, svm
+model_type: "classical"  # Options: mlp, cnn, hybrid_qcnn, svm
 
 data:
-  name: "MNIST"                  # MNIST, FashionMNIST, CIFAR10, SVHN
+  name: "mnist"                  # MNIST, FashionMNIST, CIFAR10, SVHN
   selected_classes: [3, 8]       # Pour binaire uniquement
 
 training:

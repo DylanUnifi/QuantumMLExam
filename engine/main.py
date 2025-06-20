@@ -1,50 +1,47 @@
-# main.py
-# Version: 2.1 - Multi-model + HybridQCNN support
+# main.py (Extrait pertinent pour Quantum Kernel)
+# Version 3.2 – Intégration avec le dossier `data_loader`
 
 import argparse
-import yaml
-import datetime
-import os
+import numpy as np
+import torch
+import random
+from config import load_config
+from data_loader.utils import load_dataset  # Mise à jour ici
+from train_qkernel import train_qkernel_model
 
-def load_config(config_path):
-    with open(config_path, 'r') as f:
-        return yaml.safe_load(f)
+
+def set_seed(seed):
+    torch.manual_seed(seed)
+    np.random.seed(seed)
+    random.seed(seed)
+    if torch.cuda.is_available():
+        torch.cuda.manual_seed_all(seed)
+
 
 def main():
-    parser = argparse.ArgumentParser(description="Quantum/Deep Learning Training Pipeline")
-    parser.add_argument('--config', type=str, required=True, help='Path to config.yaml')
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--model", type=str, default="qkernel", help="Model name")
+    parser.add_argument("--optimize", action="store_true", help="Enable Optuna optimization")
     args = parser.parse_args()
 
-    config = load_config(args.config)
-    model_type = config['model']['type']
+    config = load_config()
+    seed = config.get("seed", 42)
+    set_seed(seed)
 
-    # Créer run_id et dossiers
-    run_id = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
-    config['run_id'] = run_id
+    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
-    # Créer les répertoires nécessaires
-    base_dirs = ['logs', 'checkpoints', 'runs']
-    for d in base_dirs:
-        os.makedirs(os.path.join(d, run_id), exist_ok=True)
+    # Chargement du dataset via data_loader/utils.py
+    dataset_name = config.get("dataset", "MNIST")
+    selected_classes = config.get("selected_classes", [0, 1])
+    X, y = load_dataset(config=config, dataset=dataset_name, classes=selected_classes)
 
-    # Injection dans config (sous-objets aussi)
-    if 'checkpoint' in config:
-        config['checkpoint']['save_dir'] = os.path.join("checkpoints", run_id)
-    if 'svm' in config:
-        config['svm']['save_path'] = os.path.join("svm_models", run_id)
-
-
-    if model_type == 'classical':
-        from train_classical import main as train_classical
-        train_classical(config)
-    elif model_type == 'cnn':
-        from train_cnn import main as train_cnn
-        train_cnn(config)
-    elif model_type == 'hybrid':
-        from train_hybrid_qcnn import main as train_hybrid
-        train_hybrid(config)
+    if args.model == "qkernel":
+        method = config.get("qkernel_method", "fidelity")
+        n_splits = config.get("n_splits", 5)
+        train_qkernel_model(X, y, method=method, n_splits=n_splits, device=device, optimize=args.optimize)
     else:
-        raise ValueError(f"Unsupported model type: {model_type}")
+        raise ValueError(f"Unsupported model: {args.model}")
 
-if __name__ == '__main__':
+
+if __name__ == "__main__":
     main()

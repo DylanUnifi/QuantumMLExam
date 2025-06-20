@@ -2,6 +2,7 @@
 # Version: 2.0
 
 import matplotlib.pyplot as plt
+import seaborn as sns
 import os
 
 def save_plots(fold, loss_history, f1_history, save_dir):
@@ -31,3 +32,22 @@ def plot_quantum_circuit(qnode, filename='quantum_circuit.png'):
         print(f"Quantum circuit saved to {filename.replace('.png', '.txt')}")
     except Exception as e:
         print(f"Failed to save quantum circuit: {e}")
+
+def visualize_kernel_matrix(K, title="Quantum Kernel Matrix"):
+    plt.figure(figsize=(8, 6))
+    sns.heatmap(K, cmap="viridis")
+    plt.title(title)
+    plt.xlabel("Samples")
+    plt.ylabel("Samples")
+    plt.tight_layout()
+    plt.show()
+
+def plot_confusion(cm, class_names=None):
+    plt.figure(figsize=(6, 5))
+    sns.heatmap(cm, annot=True, fmt='d', cmap="Blues",
+                xticklabels=class_names, yticklabels=class_names)
+    plt.ylabel('True Label')
+    plt.xlabel('Predicted Label')
+    plt.title('Confusion Matrix')
+    plt.tight_layout()
+    plt.show()

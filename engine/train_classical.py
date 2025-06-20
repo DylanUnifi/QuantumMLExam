@@ -1,97 +1,156 @@
 # train_classical.py
-# Version: 3.1 (Enhanced MLP Training with unified checkpoint loading)
+# Version: 3.3 – Ajout de l'évaluation finale sur le test set
 
 import os
 import torch
 import torch.nn as nn
 import torch.optim as optim
-from torch.utils.data import DataLoader
 from sklearn.model_selection import KFold
+from torch.utils.tensorboard import SummaryWriter
+from torch.utils.data import TensorDataset, DataLoader
 from models.classical import MLPBinaryClassifier
-from trainer import train_one_epoch, evaluate_model
 from utils.checkpoint import save_checkpoint, load_checkpoint
+from utils.early_stopping import EarlyStopping
+from utils.metrics import log_metrics
+from data_loader.utils import load_dataset_by_name
 from utils.scheduler import get_scheduler
 from utils.visual import save_plots
-from torch.utils.tensorboard import SummaryWriter
-from utils.data import get_dataloaders
-import numpy as np
+import yaml
 
-def main(config):
-    SAVE_DIR = os.path.join(config['checkpoint']['save_dir'], 'mlp')
-    CHECKPOINT_DIR = os.path.join(SAVE_DIR, config['checkpoint']['subdir'])
-    os.makedirs(CHECKPOINT_DIR, exist_ok=True)
+# Charger config
+with open("config.yaml", "r") as f:
+    config = yaml.safe_load(f)
 
-    DEVICE = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-    BATCH_SIZE = config['training']['batch_size']
-    EPOCHS = config['training']['epochs']
-    LR = config['training']['lr']
-    KFOLD = config['training']['kfold']
-    SCHEDULER_TYPE = config['training']['scheduler']
-    EARLY_STOPPING = config['training']['early_stopping']
-    INPUT_SIZE = config['model']['input_size']
-    HIDDEN_SIZE = config['model']['hidden_size']
+# Configuration générale
+SAVE_DIR = os.path.join("checkpoints", "classical")
+CHECKPOINT_DIR = os.path.join(SAVE_DIR, "folds")
+os.makedirs(CHECKPOINT_DIR, exist_ok=True)
 
-    dataset_name = config['data']['name']
-    selected_classes = config['data']['selected_classes']
+DEVICE = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+BATCH_SIZE = config["batch_size"]
+EPOCHS = config["epochs"]
+LR = config["learning_rate"]
+KFOLD = config["kfold"]
+PATIENCE = config["early_stopping"]
+SCHEDULER_TYPE = config.get("scheduler", None)
 
-    train_data, _ = get_dataloaders(dataset_name, BATCH_SIZE, selected_classes=selected_classes)
-    X = train_data.dataset.tensors[0].view(train_data.dataset.tensors[0].shape[0], -1).numpy()
-    y = train_data.dataset.tensors[1].numpy()
+# Charger données en TensorDataset
+train_loader, test_loader = load_dataset_by_name(
+    name=config["dataset"],
+    batch_size=BATCH_SIZE,
+    selected_classes=config.get("selected_classes", [3, 8]),
+    return_tensor_dataset=True
+)
+X = train_loader.dataset.tensors[0].view(train_loader.dataset.tensors[0].shape[0], -1)
+y = train_loader.dataset.tensors[1].unsqueeze(1)
 
-    kfold = KFold(n_splits=KFOLD, shuffle=True, random_state=42)
+kfold = KFold(n_splits=KFOLD, shuffle=True, random_state=42)
 
-    for fold, (train_idx, val_idx) in enumerate(kfold.split(X)):
-        print(f"[Fold {fold}] Starting MLP training...")
-        writer = SummaryWriter(log_dir=os.path.join(SAVE_DIR, f"fold_{fold}"))
+for fold, (train_idx, val_idx) in enumerate(kfold.split(X)):
+    print(f"[Fold {fold}] Starting training...")
+    log_path = os.path.join(SAVE_DIR, f"fold_{fold}", "log.txt")
+    with open(log_path, "w") as log_file:
+        log_file.write(f"[Fold {fold}] Training Log\n\n")
 
-        X_train = torch.tensor(X[train_idx], dtype=torch.float32)
-        y_train = torch.tensor(y[train_idx], dtype=torch.float32).unsqueeze(1)
-        X_val = torch.tensor(X[val_idx], dtype=torch.float32)
-        y_val = torch.tensor(y[val_idx], dtype=torch.float32).unsqueeze(1)
+    writer = SummaryWriter(log_dir=os.path.join(SAVE_DIR, f"fold_{fold}"))
+    early_stopping = EarlyStopping(patience=PATIENCE)
 
-        train_loader = DataLoader(torch.utils.data.TensorDataset(X_train, y_train), batch_size=BATCH_SIZE, shuffle=True)
-        val_loader = DataLoader(torch.utils.data.TensorDataset(X_val, y_val), batch_size=BATCH_SIZE)
+    X_train, y_train = X[train_idx], y[train_idx]
+    X_val, y_val = X[val_idx], y[val_idx]
 
-        model = MLPBinaryClassifier(INPUT_SIZE, HIDDEN_SIZE).to(DEVICE)
-        optimizer = optim.Adam(model.parameters(), lr=LR)
-        scheduler = get_scheduler(optimizer, SCHEDULER_TYPE)
-        criterion = nn.BCELoss()
+    train_loader_fold = DataLoader(TensorDataset(X_train, y_train), batch_size=BATCH_SIZE, shuffle=True)
+    val_loader = DataLoader(TensorDataset(X_val, y_val), batch_size=BATCH_SIZE)
 
-        start_epoch, best_f1, best_epoch = 0, 0, 0
-        try:
-            model, optimizer, start_epoch = load_checkpoint(model, optimizer, CHECKPOINT_DIR, fold)
-        except FileNotFoundError:
-            print(f"No checkpoint found for fold {fold}, starting from scratch.")
+    model = MLPBinaryClassifier(input_size=X.shape[1], hidden_size=config["hidden_size"]).to(DEVICE)
+    optimizer = optim.Adam(model.parameters(), lr=LR)
+    scheduler = get_scheduler(optimizer, SCHEDULER_TYPE)
+    criterion = nn.BCELoss()
 
-        loss_history, f1_history = [], []
-        for epoch in range(start_epoch, EPOCHS):
-            train_loss = train_one_epoch(model, train_loader, optimizer, criterion, DEVICE)
-            val_loss, acc, f1, precision, recall = evaluate_model(model, val_loader, criterion, DEVICE)
+    start_epoch = 0
+    try:
+        model, optimizer, start_epoch = load_checkpoint(model, optimizer, CHECKPOINT_DIR, fold)
+        print(f"Resuming from epoch {start_epoch}")
+    except FileNotFoundError:
+        print("No checkpoint found, starting from scratch")
 
-            print(f"[Fold {fold}][Epoch {epoch}] Train Loss: {train_loss:.4f} | Val F1: {f1:.4f}")
+    loss_history, f1_history = [], []
+    best_f1, best_epoch = 0, 0
 
-            writer.add_scalar("Loss/train", train_loss, epoch)
-            writer.add_scalar("Loss/val", val_loss, epoch)
-            writer.add_scalar("F1/val", f1, epoch)
-            writer.add_scalar("Accuracy/val", acc, epoch)
-            writer.add_scalar("Precision/val", precision, epoch)
-            writer.add_scalar("Recall/val", recall, epoch)
+    for epoch in range(start_epoch, EPOCHS):
+        with open(log_path, "a") as log_file:
+            log_file.write(
+                f"[Epoch {epoch}] Loss: {val_loss:.4f} | F1: {f1:.4f} | Acc: {acc:.4f} | Prec: {precision:.4f} | Rec: {recall:.4f}\n")
 
-            loss_history.append(train_loss)
-            f1_history.append(f1)
+        model.train()
+        total_loss = 0
+        for batch_X, batch_y in train_loader_fold:
+            batch_X, batch_y = batch_X.to(DEVICE), batch_y.to(DEVICE)
+            optimizer.zero_grad()
+            outputs = model(batch_X).squeeze()
+            loss = criterion(outputs, batch_y)
+            loss.backward()
+            optimizer.step()
+            total_loss += loss.item()
 
-            if scheduler: scheduler.step()
+        model.eval()
+        y_true, y_pred = [], []
+        with torch.no_grad():
+            for batch_X, batch_y in val_loader:
+                batch_X = batch_X.to(DEVICE)
+                preds = model(batch_X).squeeze()
+                preds = (preds >= 0.5).float()
+                y_true.extend(batch_y.tolist())
+                y_pred.extend(preds.cpu().tolist())
 
-            if f1 > best_f1:
-                best_f1 = f1
-                best_epoch = epoch
-                save_checkpoint(model, optimizer, epoch, CHECKPOINT_DIR, fold, best_f1)
+        acc, f1, precision, recall = log_metrics(y_true, y_pred)
+        val_loss = total_loss / len(train_loader_fold)
 
-            if epoch - best_epoch >= EARLY_STOPPING:
-                print(f"Early stopping triggered at epoch {epoch}")
-                break
+        writer.add_scalar("Loss/train", val_loss, epoch)
+        writer.add_scalar("F1/val", f1, epoch)
+        writer.add_scalar("Accuracy/val", acc, epoch)
+        writer.add_scalar("Precision/val", precision, epoch)
+        writer.add_scalar("Recall/val", recall, epoch)
 
-        save_plots(fold, loss_history, f1_history, SAVE_DIR)
-        writer.close()
+        loss_history.append(val_loss)
+        f1_history.append(f1)
 
-    print("MLP Training finished.")
+        print(f"[Fold {fold}][Epoch {epoch}] Loss: {val_loss:.4f} | F1: {f1:.4f}")
+
+        if f1 > best_f1:
+            best_f1 = f1
+            best_epoch = epoch
+            save_checkpoint(model, optimizer, epoch, CHECKPOINT_DIR, fold, best_f1)
+            with open(log_path, "a") as log_file:
+                log_file.write(f"[Epoch {epoch}] New best F1: {f1:.4f} (Saved model)\n")
+
+        if early_stopping(f1):
+            print("Early stopping triggered.")
+            with open(log_path, "a") as log_file:
+                log_file.write(f"Early stopping triggered at epoch {epoch}\n")
+
+            break
+
+        if scheduler:
+            scheduler.step()
+
+    save_plots(fold, loss_history, f1_history, SAVE_DIR)
+    writer.close()
+
+    # Évaluation finale sur test set
+    if test_loader is not None:
+        print(f"[Fold {fold}] Loading best model and evaluating on test set...")
+        model, _, _ = load_checkpoint(model, optimizer, CHECKPOINT_DIR, fold)
+        model.eval()
+        y_test_true, y_test_pred = [], []
+        with torch.no_grad():
+            for batch_X, batch_y in test_loader:
+                batch_X = batch_X.view(batch_X.size(0), -1).to(DEVICE)
+                preds = model(batch_X).squeeze()
+                preds = (preds >= 0.5).float()
+                y_test_true.extend(batch_y.tolist())
+                y_test_pred.extend(preds.cpu().tolist())
+
+        acc, f1, precision, recall = log_metrics(y_test_true, y_test_pred)
+        print(f"[Fold {fold}] Test Accuracy: {acc:.4f} | F1: {f1:.4f} | Precision: {precision:.4f} | Recall: {recall:.4f}")
+
+print("Training and evaluation complete.")
