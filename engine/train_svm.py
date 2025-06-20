@@ -12,7 +12,7 @@ from sklearn.preprocessing import StandardScaler
 from sklearn.metrics import confusion_matrix, ConfusionMatrixDisplay
 
 from utils.logger import init_logger, write_log
-from utils.data_loader.utils import load_dataset_by_name
+from data_loader.utils import load_dataset_by_name
 from models.svm_extension import EnhancedSVM
 from utils.metrics import log_metrics
 
