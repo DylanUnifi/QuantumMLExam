@@ -19,7 +19,7 @@ from utils.scheduler import get_scheduler
 from utils.visual import save_plots, plot_quantum_circuit
 from utils.logger import init_logger, write_log
 from utils.metrics import log_metrics
-from utils.data_loader.utils import load_dataset_by_name
+from data_loader.utils import load_dataset_by_name
 
 # Charger config
 with open("config.yaml", "r") as f:
