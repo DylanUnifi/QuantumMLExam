@@ -1,5 +1,5 @@
 # train_classical.py
-# Version: 3.4 – Logging intégré pour chaque fold
+# Version: 3.7 – Ajout résumé final dans le log
 
 import os
 import torch
@@ -15,6 +15,7 @@ from utils.metrics import log_metrics
 from data_loader.utils import load_dataset_by_name
 from utils.scheduler import get_scheduler
 from utils.visual import save_plots
+from utils.logger import init_logger, write_log
 import yaml
 
 # Charger config
@@ -22,7 +23,8 @@ with open("config.yaml", "r") as f:
     config = yaml.safe_load(f)
 
 # Configuration générale
-SAVE_DIR = os.path.join("checkpoints", "classical")
+EXPERIMENT_NAME = config.get("experiment_name", "default_experiment")
+SAVE_DIR = os.path.join("checkpoints", "classical", EXPERIMENT_NAME)
 CHECKPOINT_DIR = os.path.join(SAVE_DIR, "folds")
 os.makedirs(CHECKPOINT_DIR, exist_ok=True)
 
@@ -51,9 +53,8 @@ for fold, (train_idx, val_idx) in enumerate(kfold.split(X)):
     writer = SummaryWriter(log_dir=os.path.join(SAVE_DIR, f"fold_{fold}"))
     early_stopping = EarlyStopping(patience=PATIENCE)
 
-    log_path = os.path.join(SAVE_DIR, f"fold_{fold}", "log.txt")
-    with open(log_path, "w") as log_file:
-        log_file.write(f"[Fold {fold}] Training Log\n\n")
+    log_path, log_file = init_logger(os.path.join(SAVE_DIR, "logs"), fold)
+    write_log(log_file, f"[Fold {fold}] Training Log\n")
 
     X_train, y_train = X[train_idx], y[train_idx]
     X_val, y_val = X[val_idx], y[val_idx]
@@ -75,6 +76,7 @@ for fold, (train_idx, val_idx) in enumerate(kfold.split(X)):
 
     loss_history, f1_history = [], []
     best_f1, best_epoch = 0, 0
+    stopped_early = False
 
     for epoch in range(start_epoch, EPOCHS):
         model.train()
@@ -107,8 +109,7 @@ for fold, (train_idx, val_idx) in enumerate(kfold.split(X)):
         writer.add_scalar("Precision/val", precision, epoch)
         writer.add_scalar("Recall/val", recall, epoch)
 
-        with open(log_path, "a") as log_file:
-            log_file.write(f"[Epoch {epoch}] Loss: {val_loss:.4f} | F1: {f1:.4f} | Acc: {acc:.4f} | Prec: {precision:.4f} | Rec: {recall:.4f}\n")
+        write_log(log_file, f"[Epoch {epoch}] Loss: {val_loss:.4f} | F1: {f1:.4f} | Acc: {acc:.4f} | Prec: {precision:.4f} | Rec: {recall:.4f}")
 
         loss_history.append(val_loss)
         f1_history.append(f1)
@@ -119,20 +120,26 @@ for fold, (train_idx, val_idx) in enumerate(kfold.split(X)):
             best_f1 = f1
             best_epoch = epoch
             save_checkpoint(model, optimizer, epoch, CHECKPOINT_DIR, fold, best_f1)
-            with open(log_path, "a") as log_file:
-                log_file.write(f"[Epoch {epoch}] New best F1: {f1:.4f} (Saved model)\n")
+            write_log(log_file, f"[Epoch {epoch}] New best F1: {f1:.4f} (Saved model)")
 
         if early_stopping(f1):
             print("Early stopping triggered.")
-            with open(log_path, "a") as log_file:
-                log_file.write(f"Early stopping triggered at epoch {epoch}\n")
+            write_log(log_file, f"Early stopping triggered at epoch {epoch}")
+            stopped_early = True
             break
 
         if scheduler:
             scheduler.step()
 
-    save_plots(fold, loss_history, f1_history, SAVE_DIR)
+    save_plots(fold, loss_history, f1_history, os.path.join(SAVE_DIR, "plots"))
     writer.close()
+
+    write_log(log_file, f"\n[Fold {fold}] Best F1: {best_f1:.4f} at epoch {best_epoch}")
+    if stopped_early:
+        write_log(log_file, f"Training stopped early before reaching max epochs ({EPOCHS})\n")
+    else:
+        write_log(log_file, f"Training completed full {EPOCHS} epochs\n")
+    log_file.close()
 
     # Évaluation finale sur test set
     if test_loader is not None:
@@ -150,7 +157,6 @@ for fold, (train_idx, val_idx) in enumerate(kfold.split(X)):
 
         acc, f1, precision, recall = log_metrics(y_test_true, y_test_pred)
         print(f"[Fold {fold}] Test Accuracy: {acc:.4f} | F1: {f1:.4f} | Precision: {precision:.4f} | Recall: {recall:.4f}")
-        with open(log_path, "a") as log_file:
-            log_file.write(f"\n[Fold {fold}] Test Accuracy: {acc:.4f} | F1: {f1:.4f} | Precision: {precision:.4f} | Recall: {recall:.4f}\n")
+        write_log(log_path, f"\n[Fold {fold}] Test Accuracy: {acc:.4f} | F1: {f1:.4f} | Precision: {precision:.4f} | Recall: {recall:.4f}")
 
 print("Training and evaluation complete.")
