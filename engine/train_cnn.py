@@ -1,93 +1,164 @@
 # train_cnn.py
-# Version: 2.1
+# Version: 3.7 – Centralisation logs, checkpoint avancé, gestion test, early stopping
 
 import os
 import torch
 import torch.nn as nn
 import torch.optim as optim
-from torch.utils.data import DataLoader, TensorDataset
+from torch.utils.data import TensorDataset, DataLoader
 from sklearn.model_selection import KFold
 from torch.utils.tensorboard import SummaryWriter
 from models.cnn import CNNBinaryClassifier
-from trainer import train_one_epoch, evaluate_model
 from utils.checkpoint import save_checkpoint, load_checkpoint
+from utils.early_stopping import EarlyStopping
+from utils.metrics import log_metrics
+from data_loader.utils import load_dataset_by_name
 from utils.scheduler import get_scheduler
 from utils.visual import save_plots
-import numpy as np
+from utils.logger import init_logger, write_log
+import yaml
 
-def main(config=None):
-    if config is None:
-        raise ValueError("Configuration must be provided via YAML or dictionary")
+# Charger config
+def load_config():
+    with open("config.yaml", "r") as f:
+        return yaml.safe_load(f)
 
-    SAVE_DIR = os.path.join(config['checkpoint']['save_dir'], 'cnn')
-    CHECKPOINT_DIR = os.path.join(SAVE_DIR, config['checkpoint']['subdir'])
-    DEVICE = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+config = load_config()
 
-    BATCH_SIZE = config['training']['batch_size']
-    EPOCHS = config['training']['epochs']
-    LR = config['training']['lr']
-    KFOLD = config['training']['kfold']
-    SCHEDULER_TYPE = config['training']['scheduler']
-    EARLY_STOPPING = config['training']['early_stopping']
+EXPERIMENT_NAME = config.get("experiment_name", "default_experiment")
+SAVE_DIR = os.path.join("checkpoints", "cnn", EXPERIMENT_NAME)
+CHECKPOINT_DIR = os.path.join(SAVE_DIR, "folds")
+os.makedirs(CHECKPOINT_DIR, exist_ok=True)
 
-    IN_CHANNELS = config['model']['in_channels']
-    INPUT_SHAPE = (IN_CHANNELS, 28, 28)  # fix or dynamically load from dataset
+DEVICE = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+BATCH_SIZE = config["batch_size"]
+EPOCHS = config["epochs"]
+LR = config["learning_rate"]
+KFOLD = config["kfold"]
+PATIENCE = config["early_stopping"]
+SCHEDULER_TYPE = config.get("scheduler", None)
+IN_CHANNELS = config['model']['in_channels']
 
-    # Dummy dataset (to be replaced with loader)
-    X = np.random.rand(500, *INPUT_SHAPE).astype(np.float32)
-    y = np.random.randint(0, 2, size=(500,)).astype(np.float32)
+train_loader, test_loader = load_dataset_by_name(
+    name=config["dataset"],
+    batch_size=BATCH_SIZE,
+    selected_classes=config.get("selected_classes", [3, 8]),
+    return_tensor_dataset=True
+)
+X = train_loader.dataset.tensors[0]
+y = train_loader.dataset.tensors[1].unsqueeze(1)
 
-    kfold = KFold(n_splits=KFOLD, shuffle=True, random_state=42)
+kfold = KFold(n_splits=KFOLD, shuffle=True, random_state=42)
 
-    for fold, (train_idx, val_idx) in enumerate(kfold.split(X)):
-        print(f"[Fold {fold}] Starting CNN training...")
+for fold, (train_idx, val_idx) in enumerate(kfold.split(X)):
+    print(f"[Fold {fold}] Starting training...")
+    writer = SummaryWriter(log_dir=os.path.join(SAVE_DIR, f"fold_{fold}"))
+    early_stopping = EarlyStopping(patience=PATIENCE)
 
-        writer = SummaryWriter(log_dir=os.path.join(SAVE_DIR, f"fold_{fold}"))
+    log_path, log_file = init_logger(os.path.join(SAVE_DIR, "logs"), fold)
+    write_log(log_file, f"[Fold {fold}] Training Log\n")
 
-        train_dataset = TensorDataset(torch.tensor(X[train_idx]), torch.tensor(y[train_idx]))
-        val_dataset = TensorDataset(torch.tensor(X[val_idx]), torch.tensor(y[val_idx]))
+    X_train, y_train = X[train_idx], y[train_idx]
+    X_val, y_val = X[val_idx], y[val_idx]
 
-        train_loader = DataLoader(train_dataset, batch_size=BATCH_SIZE, shuffle=True)
-        val_loader = DataLoader(val_dataset, batch_size=BATCH_SIZE)
+    train_loader_fold = DataLoader(TensorDataset(X_train, y_train), batch_size=BATCH_SIZE, shuffle=True)
+    val_loader = DataLoader(TensorDataset(X_val, y_val), batch_size=BATCH_SIZE)
 
-        model = CNNBinaryClassifier(in_channels=IN_CHANNELS).to(DEVICE)
-        optimizer = optim.Adam(model.parameters(), lr=LR)
-        scheduler = get_scheduler(optimizer, SCHEDULER_TYPE)
-        criterion = nn.BCELoss()
+    model = CNNBinaryClassifier(in_channels=IN_CHANNELS).to(DEVICE)
+    optimizer = optim.Adam(model.parameters(), lr=LR)
+    scheduler = get_scheduler(optimizer, SCHEDULER_TYPE)
+    criterion = nn.BCELoss()
 
-        start_epoch, best_f1, best_epoch = 0, 0, 0
-        try:
-            model, optimizer, start_epoch = load_checkpoint(model, optimizer, CHECKPOINT_DIR, fold)
-        except FileNotFoundError:
-            print(f"No checkpoint found for fold {fold}, starting from scratch.")
+    start_epoch = 0
+    try:
+        model, optimizer, start_epoch = load_checkpoint(model, optimizer, CHECKPOINT_DIR, fold)
+        print(f"Resuming from epoch {start_epoch}")
+    except FileNotFoundError:
+        print("No checkpoint found, starting from scratch")
 
-        loss_history, f1_history = [], []
-        for epoch in range(EPOCHS):
-            train_loss = train_one_epoch(model, train_loader, optimizer, criterion, DEVICE)
-            val_loss, acc, f1, precision, recall = evaluate_model(model, val_loader, criterion, DEVICE)
+    loss_history, f1_history = [], []
+    best_f1, best_epoch = 0, 0
+    stopped_early = False
 
-            print(f"[Fold {fold}][Epoch {epoch}] Train Loss: {train_loss:.4f} | Val F1: {f1:.4f}")
+    for epoch in range(start_epoch, EPOCHS):
+        model.train()
+        total_loss = 0
+        for batch_X, batch_y in train_loader_fold:
+            batch_X, batch_y = batch_X.to(DEVICE), batch_y.to(DEVICE)
+            optimizer.zero_grad()
+            outputs = model(batch_X).squeeze()
+            loss = criterion(outputs, batch_y)
+            loss.backward()
+            optimizer.step()
+            total_loss += loss.item()
 
-            writer.add_scalar("Loss/train", train_loss, epoch)
-            writer.add_scalar("Loss/val", val_loss, epoch)
-            writer.add_scalar("F1/val", f1, epoch)
-            writer.add_scalar("Accuracy/val", acc, epoch)
+        model.eval()
+        y_true, y_pred = [], []
+        with torch.no_grad():
+            for batch_X, batch_y in val_loader:
+                batch_X = batch_X.to(DEVICE)
+                preds = model(batch_X).squeeze()
+                preds = (preds >= 0.5).float()
+                y_true.extend(batch_y.tolist())
+                y_pred.extend(preds.cpu().tolist())
 
-            loss_history.append(train_loss)
-            f1_history.append(f1)
+        acc, f1, precision, recall = log_metrics(y_true, y_pred)
+        val_loss = total_loss / len(train_loader_fold)
 
-            if scheduler: scheduler.step()
+        writer.add_scalar("Loss/train", val_loss, epoch)
+        writer.add_scalar("F1/val", f1, epoch)
+        writer.add_scalar("Accuracy/val", acc, epoch)
+        writer.add_scalar("Precision/val", precision, epoch)
+        writer.add_scalar("Recall/val", recall, epoch)
 
-            if f1 > best_f1:
-                best_f1 = f1
-                best_epoch = epoch
-                save_checkpoint(model, optimizer, epoch, CHECKPOINT_DIR, fold)
+        write_log(log_file, f"[Epoch {epoch}] Loss: {val_loss:.4f} | F1: {f1:.4f} | Acc: {acc:.4f} | Prec: {precision:.4f} | Rec: {recall:.4f}")
 
-            if epoch - best_epoch >= EARLY_STOPPING:
-                print(f"Early stopping triggered at epoch {epoch}")
-                break
+        loss_history.append(val_loss)
+        f1_history.append(f1)
 
-        save_plots(fold, loss_history, f1_history, SAVE_DIR)
-        writer.close()
+        print(f"[Fold {fold}][Epoch {epoch}] Loss: {val_loss:.4f} | F1: {f1:.4f}")
 
-    print("CNN Training finished.")
+        if f1 > best_f1:
+            best_f1 = f1
+            best_epoch = epoch
+            save_checkpoint(model, optimizer, epoch, CHECKPOINT_DIR, fold, best_f1)
+            write_log(log_file, f"[Epoch {epoch}] New best F1: {f1:.4f} (Saved model)")
+
+        if early_stopping(f1):
+            print("Early stopping triggered.")
+            write_log(log_file, f"Early stopping triggered at epoch {epoch}")
+            stopped_early = True
+            break
+
+        if scheduler:
+            scheduler.step()
+
+    save_plots(fold, loss_history, f1_history, os.path.join(SAVE_DIR, "plots"))
+    writer.close()
+
+    write_log(log_file, f"\n[Fold {fold}] Best F1: {best_f1:.4f} at epoch {best_epoch}")
+    if stopped_early:
+        write_log(log_file, f"Training stopped early before reaching max epochs ({EPOCHS})\n")
+    else:
+        write_log(log_file, f"Training completed full {EPOCHS} epochs\n")
+    log_file.close()
+
+    # Évaluation finale sur test set
+    if test_loader is not None:
+        print(f"[Fold {fold}] Loading best model and evaluating on test set...")
+        model, _, _ = load_checkpoint(model, optimizer, CHECKPOINT_DIR, fold)
+        model.eval()
+        y_test_true, y_test_pred = [], []
+        with torch.no_grad():
+            for batch_X, batch_y in test_loader:
+                batch_X = batch_X.to(DEVICE)
+                preds = model(batch_X).squeeze()
+                preds = (preds >= 0.5).float()
+                y_test_true.extend(batch_y.tolist())
+                y_test_pred.extend(preds.cpu().tolist())
+
+        acc, f1, precision, recall = log_metrics(y_test_true, y_test_pred)
+        print(f"[Fold {fold}] Test Accuracy: {acc:.4f} | F1: {f1:.4f} | Precision: {precision:.4f} | Recall: {recall:.4f}")
+        write_log(log_path, f"\n[Fold {fold}] Test Accuracy: {acc:.4f} | F1: {f1:.4f} | Precision: {precision:.4f} | Recall: {recall:.4f}")
+
+print("CNN Training and evaluation complete.")
