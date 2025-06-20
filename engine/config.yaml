@@ -1,33 +1,15 @@
-# config.yaml
-version: "2.0"
-model_type: "classical"  # Options: mlp, cnn, hybrid_qcnn, svm
+# config.yaml pour SVM
+experiment_name: "svm_experiment_01"
 
 data:
-  name: "mnist"                  # MNIST, FashionMNIST, CIFAR10, SVHN
-  selected_classes: [3, 8]       # Pour binaire uniquement
-
-training:
-  epochs: 30
-  batch_size: 64
-  lr: 0.001
-  kfold: 5
-  scheduler: "cosine"
-  early_stopping: 5
-
-model:
-  input_size: 784               # Seulement pour MLP
-  hidden_size: 128              # Seulement pour MLP
-
-checkpoint:
-  save_dir: "./checkpoints"
-  subdir: "run1"
+  name: "fashion_mnist"            # Options: fashion_mnist, mnist, cifar10, svhn
+  selected_classes: [3, 8]         # Classes binaires à distinguer
 
 svm:
-  use_pca: true
-  pca_components: 50
-  save_path: "./svm_models"
+  use_pca: true                    # Active la réduction de dimension
+  pca_components: 50              # Nombre de composantes à conserver
+  save_path: "checkpoints/svm"    # Chemin pour sauvegarder le modèle
+  optimize: true                  # Utilise Optuna pour rechercher les meilleurs hyperparamètres
+  n_trials: 30                    # Nombre d'essais d'Optuna
 
-optuna:
-  n_trials: 30
-  direction: "minimize"
-  sampler: "TPESampler"
+seed: 42                          # Pour la reproductibilité

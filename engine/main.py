@@ -1,13 +1,20 @@
-# main.py (Extrait pertinent pour Quantum Kernel)
-# Version 3.2 – Intégration avec le dossier `data_loader`
+# main.py
+# Version: 4.0 – Unification de tous les modules d'entraînement
 
 import argparse
 import numpy as np
 import torch
 import random
+import yaml
+
 from config import load_config
-from data_loader.utils import load_dataset  # Mise à jour ici
+from data_loader.utils import load_dataset_by_name
+
+from train_classical import run_train_classical
+from train_cnn import run_train_cnn
+from train_hybrid_qcnn import run_train_hybrid_qcnn
 from train_qkernel import train_qkernel_model
+from train_svm import run_train_svm
 
 
 def set_seed(seed):
@@ -20,25 +27,32 @@ def set_seed(seed):
 
 def main():
     parser = argparse.ArgumentParser()
-    parser.add_argument("--model", type=str, default="qkernel", help="Model name")
-    parser.add_argument("--optimize", action="store_true", help="Enable Optuna optimization")
+    parser.add_argument("--model", type=str, required=True, help="Model name: classical, cnn, hybrid_qcnn, svm, qkernel")
+    parser.add_argument("--config", type=str, default="config.yaml", help="Path to configuration YAML")
+    parser.add_argument("--optimize", action="store_true", help="Enable Optuna optimization (if supported)")
     args = parser.parse_args()
 
-    config = load_config()
-    seed = config.get("seed", 42)
-    set_seed(seed)
+    config = load_config(args.config)
+    set_seed(config.get("seed", 42))
 
-    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-
-    # Chargement du dataset via data_loader/utils.py
-    dataset_name = config.get("dataset", "MNIST")
-    selected_classes = config.get("selected_classes", [0, 1])
-    X, y = load_dataset(config=config, dataset=dataset_name, classes=selected_classes)
-
-    if args.model == "qkernel":
-        method = config.get("qkernel_method", "fidelity")
-        n_splits = config.get("n_splits", 5)
-        train_qkernel_model(X, y, method=method, n_splits=n_splits, device=device, optimize=args.optimize)
+    if args.model == "classical":
+        run_train_classical(config)
+    elif args.model == "cnn":
+        run_train_cnn(config)
+    elif args.model == "hybrid_qcnn":
+        run_train_hybrid_qcnn(config)
+    elif args.model == "svm":
+        config["svm"]["optimize"] = args.optimize
+        run_train_svm(config)
+    elif args.model == "qkernel":
+        config["optimize"] = args.optimize
+        train_loader, _ = load_dataset_by_name(name=config["dataset"],
+                                               batch_size=config["batch_size"],
+                                               selected_classes=config.get("selected_classes", [3, 8]),
+                                               return_tensor_dataset=True)
+        X = train_loader.dataset.tensors[0].view(train_loader.dataset.tensors[0].shape[0], -1).numpy()
+        y = train_loader.dataset.tensors[1].numpy()
+        train_qkernel_model(X, y, config)
     else:
         raise ValueError(f"Unsupported model: {args.model}")
 
