@@ -1,5 +1,5 @@
 # train_classical.py
-# Version: 3.3 – Ajout de l'évaluation finale sur le test set
+# Version: 3.4 – Logging intégré pour chaque fold
 
 import os
 import torch
@@ -48,12 +48,12 @@ kfold = KFold(n_splits=KFOLD, shuffle=True, random_state=42)
 
 for fold, (train_idx, val_idx) in enumerate(kfold.split(X)):
     print(f"[Fold {fold}] Starting training...")
+    writer = SummaryWriter(log_dir=os.path.join(SAVE_DIR, f"fold_{fold}"))
+    early_stopping = EarlyStopping(patience=PATIENCE)
+
     log_path = os.path.join(SAVE_DIR, f"fold_{fold}", "log.txt")
     with open(log_path, "w") as log_file:
         log_file.write(f"[Fold {fold}] Training Log\n\n")
-
-    writer = SummaryWriter(log_dir=os.path.join(SAVE_DIR, f"fold_{fold}"))
-    early_stopping = EarlyStopping(patience=PATIENCE)
 
     X_train, y_train = X[train_idx], y[train_idx]
     X_val, y_val = X[val_idx], y[val_idx]
@@ -77,10 +77,6 @@ for fold, (train_idx, val_idx) in enumerate(kfold.split(X)):
     best_f1, best_epoch = 0, 0
 
     for epoch in range(start_epoch, EPOCHS):
-        with open(log_path, "a") as log_file:
-            log_file.write(
-                f"[Epoch {epoch}] Loss: {val_loss:.4f} | F1: {f1:.4f} | Acc: {acc:.4f} | Prec: {precision:.4f} | Rec: {recall:.4f}\n")
-
         model.train()
         total_loss = 0
         for batch_X, batch_y in train_loader_fold:
@@ -111,6 +107,9 @@ for fold, (train_idx, val_idx) in enumerate(kfold.split(X)):
         writer.add_scalar("Precision/val", precision, epoch)
         writer.add_scalar("Recall/val", recall, epoch)
 
+        with open(log_path, "a") as log_file:
+            log_file.write(f"[Epoch {epoch}] Loss: {val_loss:.4f} | F1: {f1:.4f} | Acc: {acc:.4f} | Prec: {precision:.4f} | Rec: {recall:.4f}\n")
+
         loss_history.append(val_loss)
         f1_history.append(f1)
 
@@ -127,7 +126,6 @@ for fold, (train_idx, val_idx) in enumerate(kfold.split(X)):
             print("Early stopping triggered.")
             with open(log_path, "a") as log_file:
                 log_file.write(f"Early stopping triggered at epoch {epoch}\n")
-
             break
 
         if scheduler:
@@ -152,5 +150,7 @@ for fold, (train_idx, val_idx) in enumerate(kfold.split(X)):
 
         acc, f1, precision, recall = log_metrics(y_test_true, y_test_pred)
         print(f"[Fold {fold}] Test Accuracy: {acc:.4f} | F1: {f1:.4f} | Precision: {precision:.4f} | Recall: {recall:.4f}")
+        with open(log_path, "a") as log_file:
+            log_file.write(f"\n[Fold {fold}] Test Accuracy: {acc:.4f} | F1: {f1:.4f} | Precision: {precision:.4f} | Recall: {recall:.4f}\n")
 
 print("Training and evaluation complete.")
