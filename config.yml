@@ -1,0 +1,33 @@
+# config.yaml
+version: "2.0"
+model_type: "mlp"  # Options: mlp, cnn, hybrid_qcnn, svm
+
+data:
+  name: "MNIST"                  # MNIST, FashionMNIST, CIFAR10, SVHN
+  selected_classes: [3, 8]       # Pour binaire uniquement
+
+training:
+  epochs: 30
+  batch_size: 64
+  lr: 0.001
+  kfold: 5
+  scheduler: "cosine"
+  early_stopping: 5
+
+model:
+  input_size: 784               # Seulement pour MLP
+  hidden_size: 128              # Seulement pour MLP
+
+checkpoint:
+  save_dir: "./checkpoints"
+  subdir: "run1"
+
+svm:
+  use_pca: true
+  pca_components: 50
+  save_path: "./svm_models"
+
+optuna:
+  n_trials: 30
+  direction: "minimize"
+  sampler: "TPESampler"
