@@ -1,6 +1,6 @@
 experiment_name: "mlp_baseline_v1"
 
-data:
+dataset:
   name: "fashion_mnist"             # Options: mnist, fashion_mnist, cifar10, svhn
   selected_classes: [3, 8]          # Binaire : première classe = 0, seconde = 1
 
@@ -11,7 +11,7 @@ model:
 training:
   batch_size: 64
   epochs: 30
-  lr: 0.001
+  learning_rate: 0.001
   kfold: 5
   scheduler: "cosine"              # Options: step, cosine, none
   early_stopping: 5                # Patience in epochs

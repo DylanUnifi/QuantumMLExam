@@ -49,14 +49,14 @@ def objective(trial, X, y, method, device, kf):
 
     return np.mean(scores)
 
-def run_train_qkernel(config):
+def train_qkernel_model(config):
     dataset = config["dataset"]
     method = config.get("method", "fidelity")
     n_splits = config.get("kfold", 5)
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     optimize = config.get("optimize", False)
     experiment_name = config.get("experiment_name", "qkernel_exp")
-    SAVE_DIR = os.path.join("checkpoints", "qkernel", experiment_name)
+    SAVE_DIR = os.path.join("engine/checkpoints", "qkernel", experiment_name)
     os.makedirs(SAVE_DIR, exist_ok=True)
 
     writer = SummaryWriter(log_dir=os.path.join(SAVE_DIR, "tensorboard"))
@@ -130,4 +130,4 @@ if __name__ == "__main__":
     import yaml
     with open("config.yaml", "r") as f:
         config = yaml.safe_load(f)
-    run_train_qkernel(config)
+    train_qkernel_model(config)

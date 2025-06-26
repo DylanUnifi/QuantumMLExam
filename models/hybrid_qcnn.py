@@ -30,7 +30,7 @@ class ResidualMLPBlock(nn.Module):
 
 # Define quantum device
 n_qubits = 4
-dev = qml.device("default.qubit", wires=n_qubits)
+dev = qml.device("lightning.qubit", wires=n_qubits)
 
 # Quantum circuit layer definition
 def qnode(inputs, weights):

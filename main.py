@@ -5,10 +5,8 @@ import argparse
 import numpy as np
 import torch
 import random
-import yaml
 
 from config import load_config
-from data_loader.utils import load_dataset_by_name
 
 from train_classical import run_train_classical
 from train_cnn import run_train_cnn
@@ -46,13 +44,7 @@ def main():
         run_train_svm(config)
     elif args.model == "qkernel":
         config["optimize"] = args.optimize
-        train_loader, _ = load_dataset_by_name(name=config["dataset"],
-                                               batch_size=config["batch_size"],
-                                               selected_classes=config.get("selected_classes", [3, 8]),
-                                               return_tensor_dataset=True)
-        X = train_loader.dataset.tensors[0].view(train_loader.dataset.tensors[0].shape[0], -1).numpy()
-        y = train_loader.dataset.tensors[1].numpy()
-        train_qkernel_model(X, y, config)
+        train_qkernel_model(config)
     else:
         raise ValueError(f"Unsupported model: {args.model}")
 

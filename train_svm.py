@@ -4,7 +4,6 @@
 import os
 import joblib
 import optuna
-import numpy as np
 import matplotlib.pyplot as plt
 from sklearn.decomposition import PCA
 from sklearn.model_selection import train_test_split
@@ -31,7 +30,7 @@ def objective(trial, X_train, y_train, X_val, y_val, log_file):
 
 def run_train_svm(config):
     EXPERIMENT_NAME = config.get("experiment_name", "default_svm")
-    SAVE_DIR = os.path.join("checkpoints", "svm", EXPERIMENT_NAME)
+    SAVE_DIR = os.path.join("engine/checkpoints", "svm", EXPERIMENT_NAME)
     LOG_DIR = os.path.join(SAVE_DIR, "logs")
     os.makedirs(SAVE_DIR, exist_ok=True)
     os.makedirs(LOG_DIR, exist_ok=True)
