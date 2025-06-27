@@ -7,7 +7,7 @@ import torch.nn as nn
 import torch.optim as optim
 from sklearn.model_selection import KFold
 from torch.utils.tensorboard import SummaryWriter
-from torch.utils.data import TensorDataset, DataLoader
+from torch.utils.data import DataLoader,Subset
 from models.classical import MLPBinaryClassifier
 from utils.checkpoint import save_checkpoint, load_checkpoint
 from utils.early_stopping import EarlyStopping
@@ -25,7 +25,7 @@ def run_train_classical(config):
     CHECKPOINT_DIR = os.path.join(SAVE_DIR, "folds")
     os.makedirs(CHECKPOINT_DIR, exist_ok=True)
 
-    DEVICE = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    DEVICE = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
     BATCH_SIZE = config["training"]["batch_size"]
     EPOCHS = config["training"]["epochs"]
     LR = config["training"]["learning_rate"]
@@ -34,18 +34,15 @@ def run_train_classical(config):
     SCHEDULER_TYPE = config.get("scheduler", None)
 
     # Charger données en TensorDataset
-    train_loader, test_loader = load_dataset_by_name(
+    train_set, test_set = load_dataset_by_name(
         name=config["dataset"]["name"],
         batch_size=BATCH_SIZE,
         selected_classes=config.get("selected_classes", [3, 8])
     )
 
-    X = train_loader.dataset[0][0] #.tensors[0].view(train_loader.dataset.tensors[0].shape[0], -1)
-    y = train_loader.dataset[1][1] #.tensors[1].unsqueeze(1)
-
     kfold = KFold(n_splits=KFOLD, shuffle=True, random_state=42)
 
-    for fold, (train_idx, val_idx) in enumerate(kfold.split(X)):
+    for fold, (train_idx, val_idx) in enumerate(kfold.split(train_set)):
         print(f"[Fold {fold}] Starting training...")
         writer = SummaryWriter(log_dir=os.path.join(SAVE_DIR, f"fold_{fold}"))
         early_stopping = EarlyStopping(patience=PATIENCE)
@@ -53,13 +50,14 @@ def run_train_classical(config):
         log_path, log_file = init_logger(os.path.join(SAVE_DIR, "logs"), fold)
         write_log(log_file, f"[Fold {fold}] Training Log\n")
 
-        X_train, y_train = X[train_idx], y[train_idx]
-        X_val, y_val = X[val_idx], y[val_idx]
+        train_subset = Subset(train_set, train_idx)
+        val_subset = Subset(test_set, val_idx)
 
-        train_loader_fold = DataLoader(TensorDataset(X_train, y_train), batch_size=BATCH_SIZE, shuffle=True)
-        val_loader = DataLoader(TensorDataset(X_val, y_val), batch_size=BATCH_SIZE)
+        train_loader_fold = DataLoader(train_subset, batch_size=BATCH_SIZE, shuffle=True)
+        val_loader = DataLoader(val_subset, batch_size=BATCH_SIZE)
 
-        model = MLPBinaryClassifier(input_size=X.shape[1], hidden_size=config["hidden_size"]).to(DEVICE)
+        # input_size=train_set.dataset.data.shape[1]
+        model = MLPBinaryClassifier(input_size=28*28, hidden_sizes=config["model"]["hidden_size"]).to(DEVICE)
         optimizer = optim.Adam(model.parameters(), lr=LR)
         scheduler = get_scheduler(optimizer, SCHEDULER_TYPE)
         criterion = nn.BCELoss()
@@ -81,7 +79,9 @@ def run_train_classical(config):
             for batch_X, batch_y in train_loader_fold:
                 batch_X, batch_y = batch_X.to(DEVICE), batch_y.to(DEVICE)
                 optimizer.zero_grad()
-                outputs = model(batch_X).squeeze()
+                outputs = model(batch_X)
+                batch_y = batch_y.view(-1, 1).float()
+                outputs = outputs.view(-1, 1)
                 loss = criterion(outputs, batch_y)
                 loss.backward()
                 optimizer.step()
@@ -165,6 +165,6 @@ def run_train_classical(config):
 if __name__ == "__main__":
     import yaml
     # Charger config
-    with open("config.yaml", "r") as f:
+    with open("/data01/pc24dylfou/PycharmProjects/qml_Project/configs/config_train_classical.yaml", "r") as f:
         config = yaml.safe_load(f)
     run_train_classical(config)

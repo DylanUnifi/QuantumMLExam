@@ -165,6 +165,6 @@ if __name__ == "__main__":
     import yaml
 
     # Charger config
-    with open("config.yaml", "r") as f:
+    with open("configs/config_quantum_mlp.yaml", "r") as f:
         config = yaml.safe_load(f)
     run_train_cnn(config)

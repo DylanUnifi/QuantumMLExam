@@ -2,7 +2,6 @@
 # Version: 2.1
 
 import torch
-import torch.nn as nn
 from sklearn.metrics import accuracy_score, f1_score, precision_score, recall_score
 
 

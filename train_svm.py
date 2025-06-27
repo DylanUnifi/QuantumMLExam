@@ -85,6 +85,6 @@ def run_train_svm(config):
 
 if __name__ == "__main__":
     import yaml
-    with open("config.yaml", "r") as f:
+    with open("configs/config_quantum_mlp.yaml", "r") as f:
         config = yaml.safe_load(f)
     run_train_svm(config)

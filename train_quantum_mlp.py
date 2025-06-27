@@ -1,8 +1,7 @@
-# train_hybrid_qcnn.py
-# Version: 3.7 – Refactor avec logger, early stopping, checkpoints, TensorBoard, visualisation circuit QNN
+# train_quantum_mlp.py
+# Version: 1.0 – Quantum-Inspired MLP Training avec early stopping, checkpoint, TensorBoard, logger
 
 import os
-import time
 import torch
 import torch.nn as nn
 import torch.optim as optim
@@ -10,20 +9,19 @@ from torch.utils.data import DataLoader, TensorDataset
 from sklearn.model_selection import KFold
 from torch.utils.tensorboard import SummaryWriter
 
-from models.hybrid_qcnn import HybridQCNNBinaryClassifier
+from models.hybrid_qclassical import QuantumResidualMLP
 from utils.checkpoint import save_checkpoint, load_checkpoint
-from utils.early_stopping import EarlyStopping
 from utils.scheduler import get_scheduler
-from utils.visual import save_plots, plot_quantum_circuit
+from utils.early_stopping import EarlyStopping
 from utils.logger import init_logger, write_log
 from utils.metrics import log_metrics
+from utils.visual import save_plots
 from data_loader.utils import load_dataset_by_name
 
 
-def run_train_hybrid_qcnn(config):
-    # Configuration générale
-    EXPERIMENT_NAME = config.get("experiment_name", "default_experiment")
-    SAVE_DIR = os.path.join("engine/checkpoints", "hybrid_qcnn", EXPERIMENT_NAME)
+def run_train_quantum_mlp(config):
+    EXPERIMENT_NAME = config.get("experiment_name", "quantum_mlp_exp")
+    SAVE_DIR = os.path.join("checkpoints", "quantum_mlp", EXPERIMENT_NAME)
     CHECKPOINT_DIR = os.path.join(SAVE_DIR, "folds")
     os.makedirs(CHECKPOINT_DIR, exist_ok=True)
 
@@ -35,25 +33,23 @@ def run_train_hybrid_qcnn(config):
     PATIENCE = config["early_stopping"]
     SCHEDULER_TYPE = config.get("scheduler", None)
 
-    # Charger données
-    train_loader, test_loader = load_dataset_by_name(
+    train_loader, _ = load_dataset_by_name(
         name=config["dataset"],
         batch_size=BATCH_SIZE,
-        selected_classes=config.get("selected_classes", [3, 8]),
+        selected_classes=config.get("selected_classes", [0, 1]),
         return_tensor_dataset=True
     )
-    X = train_loader.dataset.tensors[0].view(train_loader.dataset.tensors[0].shape[0], -1)
-    y = train_loader.dataset.tensors[1].unsqueeze(1)
+    X = train_loader.dataset.data[0].view(train_loader.dataset.tensors[0].shape[0], -1)
+    y = train_loader.dataset.data[1].unsqueeze(1)
 
     kfold = KFold(n_splits=KFOLD, shuffle=True, random_state=42)
 
     for fold, (train_idx, val_idx) in enumerate(kfold.split(X)):
-        print(f"[Fold {fold}] Starting Hybrid QCNN training...")
         writer = SummaryWriter(log_dir=os.path.join(SAVE_DIR, f"fold_{fold}"))
         early_stopping = EarlyStopping(patience=PATIENCE)
 
         log_path, log_file = init_logger(os.path.join(SAVE_DIR, "logs"), fold)
-        write_log(log_file, f"[Fold {fold}] Hybrid QCNN Training Log\n")
+        write_log(log_file, f"[Fold {fold}] Quantum MLP Training Log\n")
 
         X_train, y_train = X[train_idx], y[train_idx]
         X_val, y_val = X[val_idx], y[val_idx]
@@ -61,7 +57,7 @@ def run_train_hybrid_qcnn(config):
         train_loader_fold = DataLoader(TensorDataset(X_train, y_train), batch_size=BATCH_SIZE, shuffle=True)
         val_loader = DataLoader(TensorDataset(X_val, y_val), batch_size=BATCH_SIZE)
 
-        model = HybridQCNNBinaryClassifier(input_size=X.shape[1], device=DEVICE).to(DEVICE)
+        model = QuantumResidualMLP(input_size=X.shape[1]).to(DEVICE)
         optimizer = optim.Adam(model.parameters(), lr=LR)
         scheduler = get_scheduler(optimizer, SCHEDULER_TYPE)
         criterion = nn.BCELoss()
@@ -69,20 +65,16 @@ def run_train_hybrid_qcnn(config):
         start_epoch = 0
         try:
             model, optimizer, start_epoch = load_checkpoint(model, optimizer, CHECKPOINT_DIR, fold)
-            print(f"Resuming from epoch {start_epoch}")
         except FileNotFoundError:
-            print("No checkpoint found, starting from scratch")
+            pass
 
         loss_history, f1_history = [], []
         best_f1, best_epoch = 0, 0
         stopped_early = False
 
-        plot_quantum_circuit(model.qnn, path=os.path.join(SAVE_DIR, f"qnn_structure_fold_{fold}.png"))
-
         for epoch in range(start_epoch, EPOCHS):
             model.train()
             total_loss = 0
-            start_time = time.time()
             for batch_X, batch_y in train_loader_fold:
                 batch_X, batch_y = batch_X.to(DEVICE), batch_y.to(DEVICE)
                 optimizer.zero_grad()
@@ -104,7 +96,6 @@ def run_train_hybrid_qcnn(config):
 
             acc, f1, precision, recall = log_metrics(y_true, y_pred)
             val_loss = total_loss / len(train_loader_fold)
-            duration = time.time() - start_time
 
             writer.add_scalar("Loss/train", val_loss, epoch)
             writer.add_scalar("F1/val", f1, epoch)
@@ -112,8 +103,7 @@ def run_train_hybrid_qcnn(config):
             writer.add_scalar("Precision/val", precision, epoch)
             writer.add_scalar("Recall/val", recall, epoch)
 
-            write_log(log_file,
-                      f"[Epoch {epoch}] Time: {duration:.2f}s | Loss: {val_loss:.4f} | F1: {f1:.4f} | Acc: {acc:.4f} | Prec: {precision:.4f} | Rec: {recall:.4f}")
+            write_log(log_file, f"[Epoch {epoch}] Loss: {val_loss:.4f} | F1: {f1:.4f} | Acc: {acc:.4f} | Prec: {precision:.4f} | Rec: {recall:.4f}")
 
             loss_history.append(val_loss)
             f1_history.append(f1)
@@ -125,7 +115,6 @@ def run_train_hybrid_qcnn(config):
                 write_log(log_file, f"[Epoch {epoch}] New best F1: {f1:.4f} (Saved model)")
 
             if early_stopping(f1):
-                print("Early stopping triggered.")
                 write_log(log_file, f"Early stopping triggered at epoch {epoch}")
                 stopped_early = True
                 break
@@ -138,18 +127,9 @@ def run_train_hybrid_qcnn(config):
 
         write_log(log_file, f"\n[Fold {fold}] Best F1: {best_f1:.4f} at epoch {best_epoch}")
         if stopped_early:
-            write_log(log_file, f"Training stopped early before reaching max epochs ({EPOCHS})\n")
+            write_log(log_file, f"Training stopped early\n")
         else:
-            write_log(log_file, f"Training completed full {EPOCHS} epochs\n")
+            write_log(log_file, f"Training completed all {EPOCHS} epochs\n")
         log_file.close()
 
-    print("Hybrid QCNN Training finished.")
-
-
-if __name__ == "__main__":
-    import yaml
-
-    # Charger config
-    with open("configs/config_quantum_mlp.yaml", "r") as f:
-        config = yaml.safe_load(f)
-    run_train_hybrid_qcnn(config)
+    print("Quantum MLP training complete.")

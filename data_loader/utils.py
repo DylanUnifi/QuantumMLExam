@@ -1,19 +1,110 @@
-# utils/data_loader/utils.py
-# Interface commune de chargement de datasets
 
-from data_loader.fashion import load_fashion_mnist
-from data_loader.cifar10 import load_cifar10
-from data_loader.mnist import load_mnist
-from data_loader.svhn import load_svhn
+from torchvision import datasets, transforms
+from torch.utils.data import DataLoader, Subset
+import torch
+from torchvision.datasets import SVHN
+from torchvision.transforms import ToPILImage
+
+def build_transform(grayscale=True, augment=False):
+    """Crée une pipeline de transformations standardisée."""
+    transform_list = []
+    if grayscale:
+        transform_list.append(transforms.Grayscale())
+    if augment:
+        transform_list.extend([
+            transforms.RandomHorizontalFlip(),
+            transforms.RandomRotation(10)
+        ])
+    transform_list.extend([
+        transforms.ToTensor(),
+        transforms.Normalize((0.5,), (0.5,)) if grayscale else transforms.Normalize((0.5, 0.5, 0.5), (0.5, 0.5, 0.5))
+    ])
+    return transforms.Compose(transform_list)
+
+
+def relabel_subset(subset, targets, binary_classes):
+    binary_targets = [1 if targets[i] == binary_classes[1] else 0 for i in subset.indices]
+    for idx, label in zip(subset.indices, binary_targets):
+        targets[idx] = label
+    return subset
+
+def load_fashion_mnist(batch_size=64, binary_classes=None, root='./data'):
+    if binary_classes is None:
+        binary_classes = [3, 8]
+    transform = build_transform(grayscale=True)
+    train_set = datasets.FashionMNIST(root=root, train=True, download=True, transform=transform)
+    test_set = datasets.FashionMNIST(root=root, train=False, download=True, transform=transform)
+
+    train_idx = [i for i, t in enumerate(train_set.targets) if t in binary_classes]
+    test_idx = [i for i, t in enumerate(test_set.targets) if t in binary_classes]
+
+    train_subset = relabel_subset(Subset(train_set, train_idx), train_set.targets, binary_classes)
+    test_subset = relabel_subset(Subset(test_set, test_idx), test_set.targets, binary_classes)
+
+    return (
+        DataLoader(train_subset, batch_size=batch_size, shuffle=True),
+        DataLoader(test_subset, batch_size=batch_size)
+    )
+
+def load_cifar10(batch_size=64, binary_classes=(3, 5), root='./data'):
+    transform = build_transform(grayscale=False, augment=True)
+    train_set = datasets.CIFAR10(root=root, train=True, download=True, transform=transform)
+    test_set = datasets.CIFAR10(root=root, train=False, download=True, transform=transform)
+
+    train_idx = [i for i, t in enumerate(train_set.targets) if t in binary_classes]
+    test_idx = [i for i, t in enumerate(test_set.targets) if t in binary_classes]
+
+    train_subset = relabel_subset(Subset(train_set, train_idx), train_set.targets, binary_classes)
+    test_subset = relabel_subset(Subset(test_set, test_idx), test_set.targets, binary_classes)
+
+    return (
+        DataLoader(train_subset, batch_size=batch_size, shuffle=True),
+        DataLoader(test_subset, batch_size=batch_size)
+    )
+
+def load_svhn(batch_size=64, binary_classes=(3, 5), grayscale=True, root='./data'):
+    """
+    Charge SVHN avec filtrage des classes et DataLoader pour classification binaire.
+    """
+    transform = transforms.Compose([
+        transforms.Grayscale() if grayscale else transforms.Lambda(lambda x: x),
+        transforms.ToTensor(),
+        transforms.Normalize((0.5,), (0.5,)) if grayscale else transforms.Normalize((0.5, 0.5, 0.5), (0.5, 0.5, 0.5))
+    ])
+
+    train_set = SVHN(root=root, split='train', download=True, transform=transform)
+    test_set = SVHN(root=root, split='test', download=True, transform=transform)
+
+    def filter_and_process(dataset):
+        X, y = [], []
+        for idx in range(len(dataset)):
+            img, label = dataset[idx]  # utilise __getitem__ pour transformation correcte
+            if label in binary_classes:
+                X.append(img.view(-1))
+                y.append(1 if label == binary_classes[1] else 0)
+        return torch.stack(X), torch.tensor(y, dtype=torch.float32)
+
+    X_train, y_train = filter_and_process(train_set)
+    X_test, y_test = filter_and_process(test_set)
+
+    train_loader = torch.utils.data.DataLoader(
+        torch.utils.data.TensorDataset(X_train, y_train), batch_size=batch_size, shuffle=True
+    )
+    test_loader = torch.utils.data.DataLoader(
+        torch.utils.data.TensorDataset(X_test, y_test), batch_size=batch_size
+    )
+
+    return train_loader, test_loader
+
+
 # Ajouter les autres loaders SVHN, MNIST, etc. ici
-
 SUPPORTED_DATASETS = {
     'fashion_mnist': load_fashion_mnist,
     'cifar10': load_cifar10,
-    'mnist': load_mnist,
     'svhn': load_svhn,
 }
 
+# Interface commune de chargement de datasets
 def load_dataset_by_name(name, **kwargs):
     name = name.lower()
     if name not in SUPPORTED_DATASETS:

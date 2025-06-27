@@ -1,6 +1,6 @@
 # engine/evaluate.py
 import torch
-from utils.metrics import compute_metrics
+from utils.metrics import compute_metrics_dict
 from sklearn.metrics import confusion_matrix
 
 
@@ -21,7 +21,7 @@ def evaluate_model(model, loader, criterion, device, final=False):
 
     all_targets = torch.cat(all_targets)
     all_outputs = torch.cat(all_outputs)
-    acc, f1 = compute_metrics(all_outputs, all_targets)
+    model_metrics = compute_metrics_dict(all_outputs, all_targets)
     avg_loss = total_loss / len(loader)
 
     if final:
@@ -29,4 +29,4 @@ def evaluate_model(model, loader, criterion, device, final=False):
         print("Confusion Matrix:")
         print(cm)
 
-    return avg_loss, acc, f1
+    return avg_loss, model_metrics

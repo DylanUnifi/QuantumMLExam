@@ -28,8 +28,10 @@ class ResidualMLPBlock(nn.Module):
         return F.relu(out)
 
 class MLPBinaryClassifier(nn.Module):
-    def __init__(self, input_size, hidden_sizes=[256, 128, 64]):
+    def __init__(self, input_size, hidden_sizes=None):
         super(MLPBinaryClassifier, self).__init__()
+        if hidden_sizes is None:
+            hidden_sizes = [256, 128, 64]
         self.block1 = ResidualMLPBlock(input_size, hidden_sizes[0], downsample=True)
         self.block2 = ResidualMLPBlock(hidden_sizes[0], hidden_sizes[1], downsample=True)
         self.block3 = ResidualMLPBlock(hidden_sizes[1], hidden_sizes[2], downsample=True)
@@ -37,6 +39,7 @@ class MLPBinaryClassifier(nn.Module):
         self.fc = nn.Linear(hidden_sizes[2], 1)
 
     def forward(self, x):
+        x = torch.flatten(x, 1)
         x = self.block1(x)
         x = self.block2(x)
         x = self.block3(x)
