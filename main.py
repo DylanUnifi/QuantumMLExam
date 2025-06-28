@@ -26,7 +26,7 @@ def set_seed(seed):
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--model", type=str, required=True, help="Model name: classical, cnn, hybrid_qcnn, svm, qkernel")
-    parser.add_argument("--config", type=str, default="config_quantum_mlp.yaml", help="Path to configuration YAML")
+    parser.add_argument("--config", type=str, default="config_train_quantum_mlp.yaml", help="Path to configuration YAML")
     parser.add_argument("--optimize", action="store_true", help="Enable Optuna optimization (if supported)")
     args = parser.parse_args()
 

@@ -4,13 +4,14 @@
 import os
 import torch
 
-def save_checkpoint(model, optimizer, epoch, checkpoint_dir, fold):
+def save_checkpoint(model, optimizer, epoch, checkpoint_dir, fold, best_f1):
     os.makedirs(checkpoint_dir, exist_ok=True)
     checkpoint_path = os.path.join(checkpoint_dir, f"fold_{fold}_best_model.pt")
     torch.save({
         'epoch': epoch,
         'model_state_dict': model.state_dict(),
         'optimizer_state_dict': optimizer.state_dict(),
+        'best_f1': best_f1,
     }, checkpoint_path)
 
 

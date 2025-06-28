@@ -4,15 +4,21 @@
 import pennylane as qml
 import numpy as np
 import torch
-from sklearn.metrics.pairwise import pairwise_kernels
+from joblib import Parallel, delayed
 from tqdm import tqdm
 
 # Device setup
 _qdev_cache = {}
-def get_qdevice(n_qubits):
-    if n_qubits not in _qdev_cache:
-        _qdev_cache[n_qubits] = qml.device("default.qubit", wires=n_qubits, shots=None)
-    return _qdev_cache[n_qubits]
+def get_qdevice(n_qubits, use_gpu=False):
+    """
+    Returns a cached PennyLane device. Uses lightning.gpu if use_gpu=True, else lightning.qubit (CPU).
+    """
+    key = (n_qubits, use_gpu)
+    if key not in _qdev_cache:
+        backend = "lightning.gpu" if use_gpu else "lightning.qubit"
+        _qdev_cache[key] = qml.device(backend, wires=n_qubits, shots=None)
+    return _qdev_cache[key]
+
 
 # Hybrid Quantum Kernel (Amplitude Encoding + Fidelity)
 def hybrid_kernel_circuit(x, wires):
@@ -34,7 +40,8 @@ def compute_fidelity_kernel_matrix(X, verbose=True):
     n_samples = len(X)
     K = np.zeros((n_samples, n_samples))
     wires = list(range(int(np.log2(X.shape[1]))))
-    dev = get_qdevice(len(wires))
+    dev = get_qdevice(len(wires), use_gpu=True)
+    print(f"[INFO] Using PennyLane backend: {dev.__class__.__name__}")
 
     iterator = tqdm(range(n_samples), desc="Computing QKernel") if verbose else range(n_samples)
     for i in iterator:
@@ -46,9 +53,13 @@ def compute_fidelity_kernel_matrix(X, verbose=True):
 
 
 # Quantum Kitchen Sinks (QKS)
-def random_qks_features(X, n_qubits=4, n_layers=1, seed=42, return_weights=False):
+def random_qks_features(X, n_qubits=4, n_layers=1, seed=42, return_weights=False, n_jobs=8):
+    """
+    Compute Quantum Kitchen Sinks features in parallel using joblib.
+    """
     np.random.seed(seed)
-    dev = get_qdevice(n_qubits)
+    dev = get_qdevice(n_qubits, use_gpu=True)
+    print(f"[INFO] Using PennyLane backend: {dev.__class__.__name__}")
 
     @qml.qnode(dev)
     def qks_circuit(x, weights):
@@ -59,8 +70,17 @@ def random_qks_features(X, n_qubits=4, n_layers=1, seed=42, return_weights=False
         return [qml.expval(qml.PauliZ(i)) for i in range(n_qubits)]
 
     weights = np.random.uniform(0, 2 * np.pi, size=(n_layers, n_qubits))
-    features = np.array([qks_circuit(x, weights) for x in tqdm(X, desc="Computing QKS")])
+
+    print(f"Computing QKS in parallel with n_jobs={n_jobs if n_jobs != -1 else 'all available cores'}...")
+
+    # Parallélisation avec joblib
+    features = np.array(
+        Parallel(n_jobs=n_jobs)(
+            delayed(qks_circuit)(x, weights) for x in tqdm(X, desc="Computing QKS")
+        )
+    )
     return (features, weights) if return_weights else features
+
 
 # Torch wrappers (for hybrid kernel + SVM compatibility)
 def torch_quantum_kernel(X):

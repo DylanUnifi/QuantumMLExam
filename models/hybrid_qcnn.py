@@ -11,20 +11,20 @@ class ResidualMLPBlock(nn.Module):
         super(ResidualMLPBlock, self).__init__()
         self.downsample = None
         self.fc1 = nn.Linear(in_features, out_features)
-        self.bn1 = nn.BatchNorm1d(out_features)
+        self.ln1 = nn.LayerNorm(out_features)  # Remplace BatchNorm par LayerNorm
         self.fc2 = nn.Linear(out_features, out_features)
-        self.bn2 = nn.BatchNorm1d(out_features)
+        self.ln2 = nn.LayerNorm(out_features)  # Remplace BatchNorm par LayerNorm
 
         if downsample or in_features != out_features:
             self.downsample = nn.Sequential(
                 nn.Linear(in_features, out_features),
-                nn.BatchNorm1d(out_features)
+                nn.LayerNorm(out_features)  # Remplace BatchNorm par LayerNorm
             )
 
     def forward(self, x):
         identity = x if self.downsample is None else self.downsample(x)
-        out = F.relu(self.bn1(self.fc1(x)))
-        out = self.bn2(self.fc2(out))
+        out = F.relu(self.ln1(self.fc1(x)))
+        out = self.ln2(self.fc2(out))
         out += identity
         return F.relu(out)
 
@@ -34,6 +34,7 @@ dev = qml.device("lightning.qubit", wires=n_qubits)
 
 # Quantum circuit layer definition
 def qnode(inputs, weights):
+    inputs = inputs.flatten()  # assure un vecteur 1D de n_qubits
     for i in range(n_qubits):
         qml.RY(inputs[i], wires=i)
     qml.templates.BasicEntanglerLayers(weights, wires=range(n_qubits))
@@ -54,7 +55,7 @@ def visualize_quantum_circuit():
     print(circuit_draw)
 
 class HybridQCNNBinaryClassifier(nn.Module):
-    def __init__(self, input_size, hidden_sizes=[256, 128, 64]):
+    def __init__(self, input_size, hidden_sizes=[32, 16, 8]):
         super(HybridQCNNBinaryClassifier, self).__init__()
         self.block1 = ResidualMLPBlock(input_size, hidden_sizes[0], downsample=True)
         self.block2 = ResidualMLPBlock(hidden_sizes[0], hidden_sizes[1], downsample=True)
@@ -70,9 +71,17 @@ class HybridQCNNBinaryClassifier(nn.Module):
         x = self.block3(x)
         x = self.dropout(x)
         x = torch.tanh(self.quantum_fc_input(x))  # bounded input for quantum
-        x = self.quantum_layer(x)
+
+        # 🔥 Correction : traiter chaque élément du batch un par un
+        outputs = []
+        for sample in x:
+            q_out = self.quantum_layer(sample.unsqueeze(0))  # shape [1, n_qubits]
+            outputs.append(q_out)
+        x = torch.cat(outputs, dim=0)  # shape [batch_size, n_qubits]
+
         x = self.final_fc(x)
         return torch.sigmoid(x)
+
 
 # Auto-visualize when module is imported standalone
 if __name__ == '__main__':

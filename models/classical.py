@@ -39,7 +39,6 @@ class MLPBinaryClassifier(nn.Module):
         self.fc = nn.Linear(hidden_sizes[2], 1)
 
     def forward(self, x):
-        x = torch.flatten(x, 1)
         x = self.block1(x)
         x = self.block2(x)
         x = self.block3(x)

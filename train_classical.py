@@ -7,7 +7,7 @@ import torch.nn as nn
 import torch.optim as optim
 from sklearn.model_selection import KFold
 from torch.utils.tensorboard import SummaryWriter
-from torch.utils.data import DataLoader,Subset
+from torch.utils.data import TensorDataset, DataLoader, Subset
 from models.classical import MLPBinaryClassifier
 from utils.checkpoint import save_checkpoint, load_checkpoint
 from utils.early_stopping import EarlyStopping
@@ -34,30 +34,45 @@ def run_train_classical(config):
     SCHEDULER_TYPE = config.get("scheduler", None)
 
     # Charger données en TensorDataset
-    train_set, test_set = load_dataset_by_name(
+    train_dataset, test_dataset = load_dataset_by_name(
         name=config["dataset"]["name"],
         batch_size=BATCH_SIZE,
-        selected_classes=config.get("selected_classes", [3, 8])
+        binary_classes=config.get("binary_classes", [3, 8])
     )
+    # Après avoir chargé train_dataset
+    indices = torch.randperm(len(train_dataset))[:2000]
+    train_dataset = torch.utils.data.Subset(train_dataset, indices)
+    print(f"Nombre d'exemples chargés dans train_dataset : {len(train_dataset)}")
 
     kfold = KFold(n_splits=KFOLD, shuffle=True, random_state=42)
 
-    for fold, (train_idx, val_idx) in enumerate(kfold.split(train_set)):
+    for fold, (train_idx, val_idx) in enumerate(kfold.split(train_dataset)):
+
         print(f"[Fold {fold}] Starting training...")
+
         writer = SummaryWriter(log_dir=os.path.join(SAVE_DIR, f"fold_{fold}"))
         early_stopping = EarlyStopping(patience=PATIENCE)
 
         log_path, log_file = init_logger(os.path.join(SAVE_DIR, "logs"), fold)
         write_log(log_file, f"[Fold {fold}] Training Log\n")
 
-        train_subset = Subset(train_set, train_idx)
-        val_subset = Subset(test_set, val_idx)
+        train_subset = Subset(train_dataset, train_idx)
+        val_subset = Subset(train_dataset, val_idx)
 
         train_loader_fold = DataLoader(train_subset, batch_size=BATCH_SIZE, shuffle=True)
         val_loader = DataLoader(val_subset, batch_size=BATCH_SIZE)
 
-        # input_size=train_set.dataset.data.shape[1]
-        model = MLPBinaryClassifier(input_size=28*28, hidden_sizes=config["model"]["hidden_size"]).to(DEVICE)
+        X_train, y_train = next(iter(train_loader_fold))
+        X_val, y_val = next(iter(val_loader))
+
+        # Obtenir un exemple pour déterminer la taille de l'input
+        sample_X, _ = train_dataset[0]
+        if isinstance(sample_X, torch.Tensor):
+            input_size = sample_X.numel()
+        else:
+            raise ValueError("Échantillon de train_dataset n'est pas un Tensor.")
+
+        model = MLPBinaryClassifier(input_size=input_size, hidden_sizes=config["model"]["hidden_sizes"]).to(DEVICE)
         optimizer = optim.Adam(model.parameters(), lr=LR)
         scheduler = get_scheduler(optimizer, SCHEDULER_TYPE)
         criterion = nn.BCELoss()
@@ -77,11 +92,10 @@ def run_train_classical(config):
             model.train()
             total_loss = 0
             for batch_X, batch_y in train_loader_fold:
-                batch_X, batch_y = batch_X.to(DEVICE), batch_y.to(DEVICE)
+                batch_X, batch_y = batch_X.view(batch_X.size(0), -1).to(DEVICE), batch_y.to(DEVICE)
                 optimizer.zero_grad()
-                outputs = model(batch_X)
-                batch_y = batch_y.view(-1, 1).float()
-                outputs = outputs.view(-1, 1)
+                outputs = model(batch_X).squeeze()
+                batch_y = batch_y.view(-1).float()
                 loss = criterion(outputs, batch_y)
                 loss.backward()
                 optimizer.step()
@@ -91,7 +105,7 @@ def run_train_classical(config):
             y_true, y_pred = [], []
             with torch.no_grad():
                 for batch_X, batch_y in val_loader:
-                    batch_X = batch_X.to(DEVICE)
+                    batch_X, batch_y = batch_X.view(batch_X.size(0), -1).to(DEVICE), batch_y.to(DEVICE)
                     preds = model(batch_X).squeeze()
                     preds = (preds >= 0.5).float()
                     y_true.extend(batch_y.tolist())
@@ -137,17 +151,20 @@ def run_train_classical(config):
             write_log(log_file, f"Training stopped early before reaching max epochs ({EPOCHS})\n")
         else:
             write_log(log_file, f"Training completed full {EPOCHS} epochs\n")
-        log_file.close()
+
 
         # Évaluation finale sur test set
-        if test_loader is not None:
+        if test_dataset is not None:
             print(f"[Fold {fold}] Loading best model and evaluating on test set...")
             model, _, _ = load_checkpoint(model, optimizer, CHECKPOINT_DIR, fold)
             model.eval()
             y_test_true, y_test_pred = [], []
+
+            test_loader = DataLoader(test_dataset, batch_size=BATCH_SIZE)  # AJOUT
+
             with torch.no_grad():
                 for batch_X, batch_y in test_loader:
-                    batch_X = batch_X.view(batch_X.size(0), -1).to(DEVICE)
+                    batch_X, batch_y = batch_X.view(batch_X.size(0), -1).to(DEVICE), batch_y.to(DEVICE)
                     preds = model(batch_X).squeeze()
                     preds = (preds >= 0.5).float()
                     y_test_true.extend(batch_y.tolist())
@@ -156,8 +173,9 @@ def run_train_classical(config):
             acc, f1, precision, recall = log_metrics(y_test_true, y_test_pred)
             print(
                 f"[Fold {fold}] Test Accuracy: {acc:.4f} | F1: {f1:.4f} | Precision: {precision:.4f} | Recall: {recall:.4f}")
-            write_log(log_path,
+            write_log(log_file,
                       f"\n[Fold {fold}] Test Accuracy: {acc:.4f} | F1: {f1:.4f} | Precision: {precision:.4f} | Recall: {recall:.4f}")
+            log_file.close()
 
     print("Training and evaluation complete.")
 

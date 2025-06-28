@@ -6,6 +6,8 @@ import seaborn as sns
 import os
 
 def save_plots(fold, loss_history, f1_history, save_dir):
+    os.makedirs(save_dir, exist_ok=True)  # <- AJOUT OBLIGATOIRE
+
     plt.figure()
     plt.plot(loss_history, label='Train Loss')
     plt.xlabel('Epoch')

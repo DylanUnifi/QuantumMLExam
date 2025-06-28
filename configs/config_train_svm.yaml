@@ -1,0 +1,16 @@
+experiment_name: svm_fashionmnist_v1
+
+dataset:
+  name: fashion_mnist
+
+training:
+  batch_size: 1024
+
+binary_classes: [3, 8]  # Classe 3 contre 8 (modifiable selon ton objectif)
+
+svm:
+  use_pca: true
+  pca_components: 50
+
+optuna:
+  n_trials: 30

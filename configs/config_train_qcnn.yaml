@@ -1,0 +1,25 @@
+experiment_name: hybrid_qcnn_fashion_mnist_experiment
+
+dataset:
+  name: fashion_mnist
+  binary_classes: [3, 8]  # Ex: Pull-over vs Sandal
+
+training:
+  batch_size: 8
+  epochs: 15
+  learning_rate: 0.001
+  kfold: 5
+  early_stopping: 5
+
+model:
+  input_size: 784  # Fashion-MNIST images 28x28 aplaties
+  quantum:
+    n_qubits: 8
+    n_layers: 2
+    backend: "default.qubit"
+
+checkpoint:
+  save_dir: "checkpoints"
+  subdir: "hybrid_qcnn_fashion_mnist_experiment"
+
+scheduler: "cosine"

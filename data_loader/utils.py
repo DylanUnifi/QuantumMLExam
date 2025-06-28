@@ -105,8 +105,61 @@ SUPPORTED_DATASETS = {
 }
 
 # Interface commune de chargement de datasets
-def load_dataset_by_name(name, **kwargs):
-    name = name.lower()
-    if name not in SUPPORTED_DATASETS:
-        raise ValueError(f"Dataset '{name}' non supporté. Disponibles: {list(SUPPORTED_DATASETS.keys())}")
-    return SUPPORTED_DATASETS[name](**kwargs)
+# def load_dataset_by_name(name, **kwargs):
+#     name = name.lower()
+#     if name not in SUPPORTED_DATASETS:
+#         raise ValueError(f"Dataset '{name}' non supporté. Disponibles: {list(SUPPORTED_DATASETS.keys())}")
+#     return SUPPORTED_DATASETS[name](**kwargs)
+
+def load_dataset_by_name(name, batch_size=64, binary_classes=[3, 8], grayscale=True, root='./data'):
+    """
+    Charge le dataset spécifié et renvoie train_dataset, test_dataset (pas de DataLoader directement).
+    Utile pour appliquer KFold ou créer plusieurs DataLoaders ensuite.
+    """
+    if name.lower() == 'fashion_mnist':
+        transform = build_transform(grayscale=True)
+        train_set = datasets.FashionMNIST(root=root, train=True, download=True, transform=transform)
+        test_set = datasets.FashionMNIST(root=root, train=False, download=True, transform=transform)
+
+        train_idx = [i for i, t in enumerate(train_set.targets) if t in binary_classes]
+        test_idx = [i for i, t in enumerate(test_set.targets) if t in binary_classes]
+
+        train_subset = relabel_subset(Subset(train_set, train_idx), train_set.targets, binary_classes)
+        test_subset = relabel_subset(Subset(test_set, test_idx), test_set.targets, binary_classes)
+
+        return train_subset, test_subset
+
+    elif name.lower() == 'cifar10':
+        transform = build_transform(grayscale=grayscale, augment=True)
+        train_set = datasets.CIFAR10(root=root, train=True, download=True, transform=transform)
+        test_set = datasets.CIFAR10(root=root, train=False, download=True, transform=transform)
+
+        train_idx = [i for i, t in enumerate(train_set.targets) if t in binary_classes]
+        test_idx = [i for i, t in enumerate(test_set.targets) if t in binary_classes]
+
+        train_subset = relabel_subset(Subset(train_set, train_idx), train_set.targets, binary_classes)
+        test_subset = relabel_subset(Subset(test_set, test_idx), test_set.targets, binary_classes)
+
+        return train_subset, test_subset
+
+    elif name.lower() == 'svhn':
+        transform = build_transform(grayscale=grayscale)
+        train_set = SVHN(root=root, split='train', download=True, transform=transform)
+        test_set = SVHN(root=root, split='test', download=True, transform=transform)
+
+        def filter_and_process(dataset):
+            X, y = [], []
+            for idx in range(len(dataset)):
+                img, label = dataset[idx]
+                if label in binary_classes:
+                    X.append(img.view(-1))
+                    y.append(1 if label == binary_classes[1] else 0)
+            return torch.utils.data.TensorDataset(torch.stack(X), torch.tensor(y, dtype=torch.float32))
+
+        train_dataset = filter_and_process(train_set)
+        test_dataset = filter_and_process(test_set)
+
+        return train_dataset, test_dataset
+
+    else:
+        raise ValueError(f"[ERROR] Dataset '{name}' non pris en charge. Utilisez 'FashionMNIST', 'CIFAR10' ou 'SVHN'.")

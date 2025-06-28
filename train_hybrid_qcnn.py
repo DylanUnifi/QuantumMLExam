@@ -1,14 +1,15 @@
 # train_hybrid_qcnn.py
-# Version: 3.7 – Refactor avec logger, early stopping, checkpoints, TensorBoard, visualisation circuit QNN
+# Version: 3.8 – Harmonisé avec train_classical, évaluation test set, KFold sur Dataset
 
 import os
 import time
 import torch
 import torch.nn as nn
 import torch.optim as optim
-from torch.utils.data import DataLoader, TensorDataset
+from torch.utils.data import Subset, DataLoader
 from sklearn.model_selection import KFold
 from torch.utils.tensorboard import SummaryWriter
+from tqdm import tqdm, trange
 
 from models.hybrid_qcnn import HybridQCNNBinaryClassifier
 from utils.checkpoint import save_checkpoint, load_checkpoint
@@ -21,33 +22,33 @@ from data_loader.utils import load_dataset_by_name
 
 
 def run_train_hybrid_qcnn(config):
-    # Configuration générale
-    EXPERIMENT_NAME = config.get("experiment_name", "default_experiment")
+    EXPERIMENT_NAME = config.get("experiment_name", "hybrid_qcnn_exp")
     SAVE_DIR = os.path.join("engine/checkpoints", "hybrid_qcnn", EXPERIMENT_NAME)
     CHECKPOINT_DIR = os.path.join(SAVE_DIR, "folds")
     os.makedirs(CHECKPOINT_DIR, exist_ok=True)
 
-    DEVICE = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-    BATCH_SIZE = config["batch_size"]
-    EPOCHS = config["epochs"]
-    LR = config["learning_rate"]
-    KFOLD = config["kfold"]
-    PATIENCE = config["early_stopping"]
+    DEVICE = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
+    BATCH_SIZE = config["training"]["batch_size"]
+    EPOCHS = config["training"]["epochs"]
+    LR = config["training"]["learning_rate"]
+    KFOLD = config["training"]["kfold"]
+    PATIENCE = config["training"]["early_stopping"]
     SCHEDULER_TYPE = config.get("scheduler", None)
 
-    # Charger données
-    train_loader, test_loader = load_dataset_by_name(
-        name=config["dataset"],
+    train_dataset, test_dataset = load_dataset_by_name(
+        name=config["dataset"]["name"],
         batch_size=BATCH_SIZE,
-        selected_classes=config.get("selected_classes", [3, 8]),
-        return_tensor_dataset=True
+        binary_classes=config.get("binary_classes", [3, 8])
     )
-    X = train_loader.dataset.tensors[0].view(train_loader.dataset.tensors[0].shape[0], -1)
-    y = train_loader.dataset.tensors[1].unsqueeze(1)
+    # Après avoir chargé train_dataset
+    indices = torch.randperm(len(train_dataset))[:2000]
+    train_dataset = torch.utils.data.Subset(train_dataset, indices)
+
+    print(f"Nombre d'exemples chargés dans train_dataset : {len(train_dataset)}")
 
     kfold = KFold(n_splits=KFOLD, shuffle=True, random_state=42)
 
-    for fold, (train_idx, val_idx) in enumerate(kfold.split(X)):
+    for fold, (train_idx, val_idx) in enumerate(kfold.split(train_dataset)):
         print(f"[Fold {fold}] Starting Hybrid QCNN training...")
         writer = SummaryWriter(log_dir=os.path.join(SAVE_DIR, f"fold_{fold}"))
         early_stopping = EarlyStopping(patience=PATIENCE)
@@ -55,13 +56,16 @@ def run_train_hybrid_qcnn(config):
         log_path, log_file = init_logger(os.path.join(SAVE_DIR, "logs"), fold)
         write_log(log_file, f"[Fold {fold}] Hybrid QCNN Training Log\n")
 
-        X_train, y_train = X[train_idx], y[train_idx]
-        X_val, y_val = X[val_idx], y[val_idx]
+        train_subset = Subset(train_dataset, train_idx)
+        val_subset = Subset(train_dataset, val_idx)
 
-        train_loader_fold = DataLoader(TensorDataset(X_train, y_train), batch_size=BATCH_SIZE, shuffle=True)
-        val_loader = DataLoader(TensorDataset(X_val, y_val), batch_size=BATCH_SIZE)
+        train_loader_fold = DataLoader(train_subset, batch_size=BATCH_SIZE, shuffle=True)
+        val_loader = DataLoader(val_subset, batch_size=BATCH_SIZE)
 
-        model = HybridQCNNBinaryClassifier(input_size=X.shape[1], device=DEVICE).to(DEVICE)
+        sample_X, _ = train_dataset[0]
+        input_size = sample_X.numel()
+
+        model = HybridQCNNBinaryClassifier(input_size=input_size).to(DEVICE)
         optimizer = optim.Adam(model.parameters(), lr=LR)
         scheduler = get_scheduler(optimizer, SCHEDULER_TYPE)
         criterion = nn.BCELoss()
@@ -77,16 +81,15 @@ def run_train_hybrid_qcnn(config):
         best_f1, best_epoch = 0, 0
         stopped_early = False
 
-        plot_quantum_circuit(model.qnn, path=os.path.join(SAVE_DIR, f"qnn_structure_fold_{fold}.png"))
-
-        for epoch in range(start_epoch, EPOCHS):
+        for epoch in trange(start_epoch, EPOCHS, desc=f"[Fold {fold}] Hybrid QCNN Training"):
             model.train()
             total_loss = 0
             start_time = time.time()
-            for batch_X, batch_y in train_loader_fold:
-                batch_X, batch_y = batch_X.to(DEVICE), batch_y.to(DEVICE)
+            for batch_X, batch_y in tqdm(train_loader_fold, desc=f"[Fold {fold}] Batches"):
+                batch_X, batch_y = batch_X.view(batch_X.size(0), -1).to(DEVICE), batch_y.to(DEVICE)
                 optimizer.zero_grad()
-                outputs = model(batch_X).squeeze()
+                outputs = model(batch_X).view(-1)
+                batch_y = batch_y.view(-1).float()
                 loss = criterion(outputs, batch_y)
                 loss.backward()
                 optimizer.step()
@@ -96,8 +99,8 @@ def run_train_hybrid_qcnn(config):
             y_true, y_pred = [], []
             with torch.no_grad():
                 for batch_X, batch_y in val_loader:
-                    batch_X = batch_X.to(DEVICE)
-                    preds = model(batch_X).squeeze()
+                    batch_X, batch_y = batch_X.view(batch_X.size(0), -1).to(DEVICE), batch_y.to(DEVICE)
+                    preds = model(batch_X).view(-1)
                     preds = (preds >= 0.5).float()
                     y_true.extend(batch_y.tolist())
                     y_pred.extend(preds.cpu().tolist())
@@ -141,15 +144,34 @@ def run_train_hybrid_qcnn(config):
             write_log(log_file, f"Training stopped early before reaching max epochs ({EPOCHS})\n")
         else:
             write_log(log_file, f"Training completed full {EPOCHS} epochs\n")
-        log_file.close()
 
-    print("Hybrid QCNN Training finished.")
+        # Évaluation finale sur test set
+        if test_dataset is not None:
+            print(f"[Fold {fold}] Loading best model and evaluating on test set...")
+            model, _, _ = load_checkpoint(model, optimizer, CHECKPOINT_DIR, fold)
+            model.eval()
+            y_test_true, y_test_pred = [], []
+
+            test_loader = DataLoader(test_dataset, batch_size=BATCH_SIZE)
+            with torch.no_grad():
+                for batch_X, batch_y in test_loader:
+                    batch_X, batch_y = batch_X.view(batch_X.size(0), -1).to(DEVICE), batch_y.to(DEVICE)
+                    preds = model(batch_X).view(-1)
+                    preds = (preds >= 0.5).float()
+                    y_test_true.extend(batch_y.tolist())
+                    y_test_pred.extend(preds.cpu().tolist())
+
+            acc, f1, precision, recall = log_metrics(y_test_true, y_test_pred)
+            print(f"[Fold {fold}] Test Accuracy: {acc:.4f} | F1: {f1:.4f} | Precision: {precision:.4f} | Recall: {recall:.4f}")
+            write_log(log_file,
+                      f"\n[Fold {fold}] Test Accuracy: {acc:.4f} | F1: {f1:.4f} | Precision: {precision:.4f} | Recall: {recall:.4f}")
+            log_file.close()
+
+    print("Hybrid QCNN training and evaluation complete.")
 
 
 if __name__ == "__main__":
     import yaml
-
-    # Charger config
-    with open("configs/config_quantum_mlp.yaml", "r") as f:
+    with open("/data01/pc24dylfou/PycharmProjects/qml_Project/configs/config_train_qcnn.yaml", "r") as f:
         config = yaml.safe_load(f)
     run_train_hybrid_qcnn(config)

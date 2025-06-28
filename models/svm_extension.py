@@ -1,5 +1,6 @@
 # svm_extension.py
 # Version: 1.0 - Extension personnalisée de sklearn.SVC avec hooks GPU/monitoring
+import os
 
 from sklearn.svm import SVC
 from sklearn.metrics import accuracy_score, f1_score, precision_score, recall_score
@@ -19,15 +20,10 @@ class EnhancedSVM(BaseEstimator, ClassifierMixin):
         self.model = SVC(C=self.C, kernel=self.kernel, gamma=self.gamma)
 
     def fit(self, X, y):
-        if self.use_pca and self.pca_model:
-            X = self.pca_model.transform(X)
-
         self.model.fit(X, y)
         return self
 
     def predict(self, X):
-        if self.use_pca and self.pca_model:
-            X = self.pca_model.transform(X)
         return self.model.predict(X)
 
     def evaluate(self, X, y_true):
@@ -40,7 +36,20 @@ class EnhancedSVM(BaseEstimator, ClassifierMixin):
         }
 
     def save(self):
-        joblib.dump(self, self.save_path)
+        """
+        Sauvegarde le modèle SVM (avec scaler et PCA s'il y en a un)
+        dans un fichier pickle à l'intérieur de self.save_path.
+        """
+        # Assurer que le dossier de sauvegarde existe
+        os.makedirs(self.save_path, exist_ok=True)
+
+        # Construire le chemin complet du fichier
+        model_path = os.path.join(self.save_path, "svm_model.pkl")
+
+        # Sauvegarder l'objet complet
+        joblib.dump(self, model_path)
+
+        print(f"✅ Modèle sauvegardé avec succès : {model_path}")
 
     @staticmethod
     def load(path):
