@@ -25,9 +25,10 @@ def set_seed(seed):
 
 
 def main():
-    parser = argparse.ArgumentParser(description="Unified training script for classical, CNN, hybrid QCNN, SVM, and QKernel models.")
+    parser = argparse.ArgumentParser(description="Unified training script for classical, CNN, hybrid QCNN, Quantum MLP,"
+                                                 "hybrid_qcnn_svm, SVM, and  models.")
     parser.add_argument("--model", type=str, required=True,
-                        help="Model name: classical, cnn, hybrid_qcnn, svm, qkernel")
+                        help="Model name: classical, cnn, hybrid_qcnn, quantum_mlp, hybrid_qcnn_svm, svm")
     parser.add_argument("--config", type=str, default="configs/config_train_quantum_mlp_fashion.yaml",
                         help="Path to configuration YAML file")
     parser.add_argument("--optimize", action="store_true",
@@ -36,7 +37,7 @@ def main():
                         help="Weights & Biases project name")
 
     args = parser.parse_args()
-    available_models = {"classical", "cnn", "hybrid_qcnn", "svm", "qkernel"}
+    available_models = {"classical", "cnn", "hybrid_qcnn", "svm", "quantum_mlp", "hybrid_qcnn_svm"}
 
     if args.model not in available_models:
         print(f"[ERROR] Unsupported model '{args.model}'. Choose from: {', '.join(available_models)}.")
@@ -56,7 +57,7 @@ def main():
         config=config,
         notes=f"Model: {args.model}, Optimize: {args.optimize}"
     )
-    wandb.config.update({"model": args.model, "optimize": args.optimize})
+    wandb.config.update({"model": args.model, "optimize": args.optimize}, allow_val_change=True)
 
     # ➤ Lancement du bon script en fonction du modèle choisi
     if args.model == "classical":
@@ -64,6 +65,8 @@ def main():
     elif args.model == "cnn":
         run_train_cnn(config)
     elif args.model == "hybrid_qcnn":
+        run_train_cnn(config)
+    elif args.model == "quantum_mlp":
         run_train_hybrid_qcnn(config)
     elif args.model == "hybrid_qcnn_svm":
         run_train_hybrid_qcnn_svm(config)

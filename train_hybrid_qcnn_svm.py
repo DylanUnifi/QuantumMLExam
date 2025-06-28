@@ -92,7 +92,7 @@ def run_train_hybrid_qcnn_svm(config):
         best_f1, best_epoch = 0, 0
 
         for epoch in range(config["training"]["epochs"]):
-            train_loss = train_feature_extractor(feature_extractor, classifier, train_loader, optimizer, criterion)
+            val_loss = train_feature_extractor(feature_extractor, classifier, train_loader, optimizer, criterion)
             X_val, y_val = extract_features(feature_extractor, val_loader)
 
             scaler = StandardScaler()
@@ -101,21 +101,21 @@ def run_train_hybrid_qcnn_svm(config):
             svm.fit(X_val_scaled, y_val)
             y_pred = svm.predict(X_val_scaled)
 
-            acc, f1, prec, recall = log_metrics(y_val, y_pred)
+            acc, f1, precision, recall = log_metrics(y_val, y_pred)
 
             wandb.log({
-                "train/loss": train_loss,
-                "val/accuracy": acc,
+                "train/loss": val_loss,
                 "val/f1": f1,
-                "val/precision": prec,
+                "val/accuracy": acc,
+                "val/precision": precision,
                 "val/recall": recall,
                 "epoch": epoch,
-                "fold": fold
+                "fold": fold,
             })
 
             write_log(log_file,
-                      f"[Epoch {epoch}] Loss: {train_loss:.4f} | F1: {f1:.4f} | Acc: {acc:.4f} | Prec: {prec:.4f} | Rec: {recall:.4f}")
-            print(f"[Fold {fold}][Epoch {epoch}] Loss: {train_loss:.4f} | F1: {f1:.4f}")
+                      f"[Epoch {epoch}] Loss: {val_loss:.4f} | F1: {f1:.4f} | Acc: {acc:.4f} | Prec: {precision:.4f} | Rec: {recall:.4f}")
+            print(f"[Fold {fold}][Epoch {epoch}] Loss: {val_loss:.4f} | F1: {f1:.4f}")
 
             if f1 > best_f1:
                 best_f1, best_epoch = f1, epoch
@@ -132,6 +132,9 @@ def run_train_hybrid_qcnn_svm(config):
 
             if scheduler:
                 scheduler.step()
+
+        wandb.run.summary[f"fold_{fold}/best_f1"] = best_f1
+        wandb.run.summary[f"fold_{fold}/best_epoch"] = best_epoch
 
         write_log(log_file, f"\n[Fold {fold}] Best F1: {best_f1:.4f} at epoch {best_epoch}")
         log_file.close()
@@ -218,12 +221,20 @@ def run_train_hybrid_qcnn_svm(config):
                 K[i, j] = quantum_kernel(X1[i], X2[j])
         return K
 
-    # Extraire n_samples pour QSVM si spécifié dans le YAML
-    qsvm_samples = config.get("qsvm", {}).get("n_samples", len(X_trainval))
-    X_trainval_q = X_trainval[:qsvm_samples]
-    y_trainval_q = y_trainval[:qsvm_samples]
-    X_test_q = X_test[:qsvm_samples]
-    y_test_q = y_test[:qsvm_samples]
+    # Limiter le nombre d'exemples pour le calcul du kernel QSVM
+    max_kernel_samples = 500  # 👈 adapte si besoin
+
+    n_samples = min(max_kernel_samples, len(X_trainval))
+    indices_train = np.random.choice(len(X_trainval), n_samples, replace=False)
+    indices_test = np.random.choice(len(X_test), n_samples, replace=False)
+
+    X_trainval_q = X_trainval[indices_train]
+    y_trainval_q = y_trainval[indices_train]
+    X_test_q = X_test[indices_test]
+    y_test_q = y_test[indices_test]
+
+    print(f"\n🔎 Subsampled to {n_samples} examples for QSVM kernel computation.")
+    print(f"🔎 Using {len(X_trainval_q)} train examples and {len(X_test_q)} test examples for QSVM kernel.")
 
     print("\n🔎 QSVM: Calculating quantum kernel matrices...")
     K_train = compute_quantum_kernel_matrix(X_trainval_q, X_trainval_q)
@@ -254,6 +265,6 @@ def run_train_hybrid_qcnn_svm(config):
 
 if __name__ == "__main__":
     import yaml
-    with open("configs/config_train_hybrid_qcnn_svm_cifar10.yaml", "r") as f:
+    with open("configs/config_train_hybrid_qcnn_svm_fashion.yaml", "r") as f:
         config = yaml.safe_load(f)
     run_train_hybrid_qcnn_svm(config)

@@ -5,7 +5,7 @@ dataset:
   binary_classes: [3, 8]
 
 training:
-  batch_size: 64
+  batch_size: 256
   kfold: 5
 
 svm:

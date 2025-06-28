@@ -158,6 +158,9 @@ def run_train_hybrid_qcnn(config):
             if scheduler:
                 scheduler.step()
 
+        wandb.run.summary[f"fold_{fold}/best_f1"] = best_f1
+        wandb.run.summary[f"fold_{fold}/best_epoch"] = best_epoch
+
         write_log(log_file, f"\n[Fold {fold}] Best F1: {best_f1:.4f} at epoch {best_epoch}")
         if stopped_early:
             write_log(log_file, f"Training stopped early before reaching max epochs ({EPOCHS})\n")
@@ -205,10 +208,8 @@ def run_train_hybrid_qcnn(config):
 
 
 if __name__ == "__main__":
-    import argparse, yaml
-    parser = argparse.ArgumentParser(description="Train Hybrid QCNN")
-    parser.add_argument("--config", type=str, default="configs/config_train_qcnn_cifar10.yaml", help="Path to YAML config")
-    args = parser.parse_args()
-    with open(args.config, "r") as f:
+    import yaml
+    with open("configs/config_train_qcnn_cifar10.yaml", "r") as f:
         config = yaml.safe_load(f)
     run_train_hybrid_qcnn(config)
+    wandb.finish()

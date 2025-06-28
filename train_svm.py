@@ -10,6 +10,7 @@ from sklearn.model_selection import train_test_split
 from sklearn.preprocessing import StandardScaler
 from sklearn.metrics import confusion_matrix, ConfusionMatrixDisplay
 import torch
+from torch.utils.data import Subset
 
 from utils.logger import init_logger, write_log
 from data_loader.utils import load_dataset_by_name
@@ -55,6 +56,9 @@ def run_train_svm(config):
         batch_size=batch_size,
         binary_classes=binary_classes
     )
+
+    indices = torch.randperm(len(train_dataset))[:2000]
+    train_dataset = Subset(train_dataset, indices)
 
     print(f"Nombre d'exemples chargés dans train_dataset : {len(train_dataset)}")
 
@@ -122,6 +126,6 @@ def run_train_svm(config):
 
 if __name__ == "__main__":
     import yaml
-    with open("/configs/config_train_svm_fashion.yaml", "r") as f:
+    with open("configs/config_train_svm_svhn.yaml", "r") as f:
         config = yaml.safe_load(f)
     run_train_svm(config)

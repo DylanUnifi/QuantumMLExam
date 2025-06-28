@@ -17,6 +17,7 @@ from utils.metrics import log_metrics
 from utils.visual import save_plots
 from data_loader.utils import load_dataset_by_name
 import wandb
+from tqdm import tqdm, trange
 
 
 def run_train_quantum_mlp(config):
@@ -63,7 +64,7 @@ def run_train_quantum_mlp(config):
         train_subset = torch.utils.data.Subset(train_dataset, train_idx)
         val_subset = torch.utils.data.Subset(train_dataset, val_idx)
 
-        train_loader_fold = DataLoader(train_subset, batch_size=BATCH_SIZE, shuffle=True)
+        train_loader = DataLoader(train_subset, batch_size=BATCH_SIZE, shuffle=True)
         val_loader = DataLoader(val_subset, batch_size=BATCH_SIZE)
 
         # Exemple pour input_size
@@ -86,10 +87,10 @@ def run_train_quantum_mlp(config):
         best_f1, best_epoch = 0, 0
         stopped_early = False
 
-        for epoch in range(start_epoch, EPOCHS):
+        for epoch in trange(start_epoch, EPOCHS, desc=f"[Fold {fold}] Quantum MLP Training"):
             model.train()
             total_loss = 0
-            for batch_X, batch_y in train_loader_fold:
+            for batch_X, batch_y in tqdm(train_loader, desc=f"[Fold {fold}] Batches"):
                 batch_X, batch_y = batch_X.view(batch_X.size(0), -1).to(DEVICE), batch_y.to(DEVICE)
                 optimizer.zero_grad()
                 outputs = model(batch_X).squeeze()
@@ -110,7 +111,7 @@ def run_train_quantum_mlp(config):
                     y_pred.extend(preds.cpu().tolist())
 
             acc, f1, precision, recall = log_metrics(y_true, y_pred)
-            val_loss = total_loss / len(train_loader_fold)
+            val_loss = total_loss / len(train_loader)
 
             writer.add_scalar("Loss/train", val_loss, epoch)
             writer.add_scalar("F1/val", f1, epoch)
@@ -125,12 +126,13 @@ def run_train_quantum_mlp(config):
 
             # 📊 Log des métriques à wandb
             wandb.log({
-                "train/accuracy": acc,
-                "train/f1": f1,
-                "train/recall": recall,
                 "train/loss": val_loss,
+                "val/f1": f1,
+                "val/accuracy": acc,
+                "val/precision": precision,
+                "val/recall": recall,
                 "epoch": epoch,
-                "fold": fold
+                "fold": fold,
             })
 
             print(f"[Fold {fold}][Epoch {epoch}] Loss: {val_loss:.4f} | F1: {f1:.4f}")
@@ -152,6 +154,9 @@ def run_train_quantum_mlp(config):
 
             if scheduler:
                 scheduler.step()
+
+        wandb.run.summary[f"fold_{fold}/best_f1"] = best_f1
+        wandb.run.summary[f"fold_{fold}/best_epoch"] = best_epoch
 
         save_plots(fold, loss_history, f1_history, os.path.join(SAVE_DIR, "plots"))
         writer.close()
@@ -184,19 +189,22 @@ def run_train_quantum_mlp(config):
                 f"[Fold {fold}] Test Accuracy: {acc:.4f} | F1: {f1:.4f} | Precision: {precision:.4f} | Recall: {recall:.4f}")
             write_log(log_file,
                       f"\n[Fold {fold}] Test Accuracy: {acc:.4f} | F1: {f1:.4f} | Precision: {precision:.4f} | Recall: {recall:.4f}")
-            log_file.close()
 
-        wandb.log({
-            "fold/best_f1": best_f1,
-            "fold/best_epoch": best_epoch,
-            "fold": fold
-        })
+            wandb.log({
+                "test/f1": f1,
+                "test/accuracy": acc,
+                "test/precision": precision,
+                "test/recall": recall,
+                "fold": fold
+            })
+
+            log_file.close()
 
     print("Quantum MLP training complete.")
 
 
 if __name__ == "__main__":
     import yaml
-    with open("/configs/config_train_quantum_mlp_fashion.yaml", "r") as f:
+    with open("configs/config_train_quantum_mlp_fashion.yaml", "r") as f:
         config = yaml.safe_load(f)
     run_train_quantum_mlp(config)

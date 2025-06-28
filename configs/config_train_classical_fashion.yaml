@@ -3,16 +3,17 @@ experiment_name: "mlp_baseline_v1"
 dataset:
   name: "fashion_mnist"             # Options: fashion_mnist, cifar10, svhn
   binary_classes: [3, 8]          # Binaire : première classe = 0, seconde = 1
+  in_channels: 1
 
 model:
   input_size: 784                   # 28x28 images aplaties
-  hidden_sizes: [256, 128, 64]
+  hidden_sizes: [128, 64, 32]
 
 training:
-  batch_size: 128
-  epochs: 50
+  batch_size: 256
+  epochs: 20
   learning_rate: 0.001
-  kfold: 5
+  kfold: 3
   scheduler: "cosine"              # Options: step, cosine, none
   early_stopping: 5                # Patience in epochs
 

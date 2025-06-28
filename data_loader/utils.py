@@ -13,12 +13,16 @@ def build_transform(grayscale=True, augment=False):
     if augment:
         transform_list.extend([
             transforms.RandomHorizontalFlip(),
-            transforms.RandomRotation(10)
+            transforms.RandomRotation(10),
+            transforms.RandomCrop(28, padding=4)
         ])
-    transform_list.extend([
-        transforms.ToTensor(),
-        transforms.Normalize((0.5,), (0.5,)) if grayscale else transforms.Normalize((0.5, 0.5, 0.5), (0.5, 0.5, 0.5))
-    ])
+    if grayscale:
+        transform_list.append(transforms.ToTensor())
+        transform_list.append(transforms.Normalize(mean=[0.5], std=[0.5]))  # 🔥 1 canal
+    else:
+        transform_list.append(transforms.ToTensor())
+        transform_list.append(transforms.Normalize(mean=[0.5, 0.5, 0.5], std=[0.5, 0.5, 0.5]))  # 🔥 3 canaux
+
     return transforms.Compose(transform_list)
 
 
@@ -28,10 +32,10 @@ def relabel_subset(subset, targets, binary_classes):
         targets[idx] = label
     return subset
 
-def load_fashion_mnist(batch_size=64, binary_classes=None, root='./data'):
+def load_fashion_mnist(batch_size=64, binary_classes=None, grayscale=True, root='./data'):
     if binary_classes is None:
         binary_classes = [3, 8]
-    transform = build_transform(grayscale=True)
+    transform = build_transform(grayscale=grayscale, augment=True)
     train_set = datasets.FashionMNIST(root=root, train=True, download=True, transform=transform)
     test_set = datasets.FashionMNIST(root=root, train=False, download=True, transform=transform)
 
@@ -46,8 +50,8 @@ def load_fashion_mnist(batch_size=64, binary_classes=None, root='./data'):
         DataLoader(test_subset, batch_size=batch_size)
     )
 
-def load_cifar10(batch_size=64, binary_classes=(3, 5), root='./data'):
-    transform = build_transform(grayscale=False, augment=True)
+def load_cifar10(batch_size=64, binary_classes=(3, 5), grayscale=True, root='./data'):
+    transform = build_transform(grayscale=grayscale, augment=True)
     train_set = datasets.CIFAR10(root=root, train=True, download=True, transform=transform)
     test_set = datasets.CIFAR10(root=root, train=False, download=True, transform=transform)
 
@@ -78,11 +82,11 @@ def load_svhn(batch_size=64, binary_classes=(3, 5), grayscale=True, root='./data
     def filter_and_process(dataset):
         X, y = [], []
         for idx in range(len(dataset)):
-            img, label = dataset[idx]  # utilise __getitem__ pour transformation correcte
+            img, label = dataset[idx]
             if label in binary_classes:
-                X.append(img.view(-1))
+                X.append(img)  # conserve la forme [3, 32, 32]
                 y.append(1 if label == binary_classes[1] else 0)
-        return torch.stack(X), torch.tensor(y, dtype=torch.float32)
+        return torch.utils.data.TensorDataset(torch.stack(X), torch.tensor(y, dtype=torch.float32))
 
     X_train, y_train = filter_and_process(train_set)
     X_test, y_test = filter_and_process(test_set)
@@ -113,8 +117,7 @@ SUPPORTED_DATASETS = {
 
 def load_dataset_by_name(name, batch_size=64, binary_classes=[3, 8], grayscale=True, root='./data'):
     """
-    Charge le dataset spécifié et renvoie train_dataset, test_dataset (pas de DataLoader directement).
-    Utile pour appliquer KFold ou créer plusieurs DataLoaders ensuite.
+    Charge le dataset spécifié et renvoie train_dataset, test_dataset.
     """
     if name.lower() == 'fashion_mnist':
         transform = build_transform(grayscale=True)
@@ -152,7 +155,7 @@ def load_dataset_by_name(name, batch_size=64, binary_classes=[3, 8], grayscale=T
             for idx in range(len(dataset)):
                 img, label = dataset[idx]
                 if label in binary_classes:
-                    X.append(img.view(-1))
+                    X.append(img)  # ✅ conserve la forme [3, 32, 32] pour la CNN
                     y.append(1 if label == binary_classes[1] else 0)
             return torch.utils.data.TensorDataset(torch.stack(X), torch.tensor(y, dtype=torch.float32))
 

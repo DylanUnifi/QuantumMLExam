@@ -5,14 +5,16 @@ dataset:
   binary_classes: [3, 8]  # Pull-over vs Sandal par ex. (classes 3 et 8)
 
 training:
-  batch_size: 64
+  batch_size: 256
   epochs: 20
   learning_rate: 0.001
-  kfold: 5
+  kfold: 3
   early_stopping: 5
 
 model:
   in_channels: 1  # Fashion-MNIST est en niveaux de gris comme MNIST
+  hidden_sizes: [128, 64, 32]
+  grayscale: true   # 🔥 Ajout clé ici : permet de choisir depuis le yaml
 
 checkpoint:
   save_dir: "checkpoints"

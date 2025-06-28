@@ -1,5 +1,5 @@
 # train_cnn.py
-# Version: 3.8 – Harmonisé avec train_classical (Dataset en entrée, KFold, logs, test set)
+# Version: 4.0 – Ajout logs complets par fold, résumé wandb, harmonisation
 
 import os
 import torch
@@ -10,13 +10,14 @@ from sklearn.model_selection import KFold
 from torch.utils.tensorboard import SummaryWriter
 
 from models.cnn import CNNBinaryClassifier
-from utils.checkpoint import save_checkpoint, load_checkpoint
+from utils.checkpoint import save_checkpoint, safe_load_checkpoint
 from utils.early_stopping import EarlyStopping
 from utils.metrics import log_metrics
 from data_loader.utils import load_dataset_by_name
 from utils.scheduler import get_scheduler
 from utils.visual import save_plots
 from utils.logger import init_logger, write_log
+from tqdm import tqdm, trange
 import wandb
 
 
@@ -38,11 +39,11 @@ def run_train_cnn(config):
     SCHEDULER_TYPE = config.get("scheduler", None)
     IN_CHANNELS = config['model']['in_channels']
 
-    # Charger les datasets
     train_dataset, test_dataset = load_dataset_by_name(
         name=config["dataset"]["name"],
         batch_size=BATCH_SIZE,
-        binary_classes=config.get("binary_classes", [3, 8])
+        binary_classes=config.get("binary_classes", [3, 8]),
+        grayscale=config["dataset"].get("grayscale", None)  # 🔥 récupère du yaml
     )
     print(f"Nombre d'exemples chargés dans train_dataset : {len(train_dataset)}")
 
@@ -60,7 +61,7 @@ def run_train_cnn(config):
         train_subset = Subset(train_dataset, train_idx)
         val_subset = Subset(train_dataset, val_idx)
 
-        train_loader_fold = DataLoader(train_subset, batch_size=BATCH_SIZE, shuffle=True)
+        train_loader = DataLoader(train_subset, batch_size=BATCH_SIZE, shuffle=True)
         val_loader = DataLoader(val_subset, batch_size=BATCH_SIZE)
 
         model = CNNBinaryClassifier(in_channels=IN_CHANNELS).to(DEVICE)
@@ -70,7 +71,7 @@ def run_train_cnn(config):
 
         start_epoch = 0
         try:
-            model, optimizer, start_epoch = load_checkpoint(model, optimizer, CHECKPOINT_DIR, fold)
+            model, optimizer, start_epoch = safe_load_checkpoint(model, optimizer, CHECKPOINT_DIR, fold)
             print(f"Resuming from epoch {start_epoch}")
         except FileNotFoundError:
             print("No checkpoint found, starting from scratch")
@@ -79,10 +80,10 @@ def run_train_cnn(config):
         best_f1, best_epoch = 0, 0
         stopped_early = False
 
-        for epoch in range(start_epoch, EPOCHS):
+        for epoch in trange(start_epoch, EPOCHS, desc=f"[Fold {fold}] CNN Training"):
             model.train()
             total_loss = 0
-            for batch_X, batch_y in train_loader_fold:
+            for batch_X, batch_y in tqdm(train_loader, desc=f"[Fold {fold}] Batches"):
                 batch_X, batch_y = batch_X.to(DEVICE), batch_y.to(DEVICE)
                 optimizer.zero_grad()
                 outputs = model(batch_X).squeeze()
@@ -103,7 +104,7 @@ def run_train_cnn(config):
                     y_pred.extend(preds.cpu().tolist())
 
             acc, f1, precision, recall = log_metrics(y_true, y_pred)
-            val_loss = total_loss / len(train_loader_fold)
+            val_loss = total_loss / len(train_loader)
 
             writer.add_scalar("Loss/train", val_loss, epoch)
             writer.add_scalar("F1/val", f1, epoch)
@@ -113,12 +114,12 @@ def run_train_cnn(config):
 
             wandb.log({
                 "train/loss": val_loss,
-                "train/f1": f1,
-                "train/accuracy": acc,
-                "train/precision": precision,
-                "train/recall": recall,
+                "val/f1": f1,
+                "val/accuracy": acc,
+                "val/precision": precision,
+                "val/recall": recall,
                 "epoch": epoch,
-                "fold": fold
+                "fold": fold,
             })
 
             write_log(log_file,
@@ -135,8 +136,8 @@ def run_train_cnn(config):
                 save_checkpoint(model, optimizer, epoch, CHECKPOINT_DIR, fold, best_f1)
                 write_log(log_file, f"[Epoch {epoch}] New best F1: {f1:.4f} (Saved model)")
 
-                wandb.run.summary["best_f1"] = best_f1
-                wandb.run.summary["best_epoch"] = best_epoch
+                wandb.run.summary[f"fold_{fold}/best_f1"] = best_f1
+                wandb.run.summary[f"fold_{fold}/best_epoch"] = best_epoch
 
             if early_stopping(f1):
                 print("Early stopping triggered.")
@@ -146,6 +147,9 @@ def run_train_cnn(config):
 
             if scheduler:
                 scheduler.step()
+
+        wandb.run.summary[f"fold_{fold}/best_f1"] = best_f1
+        wandb.run.summary[f"fold_{fold}/best_epoch"] = best_epoch
 
         save_plots(fold, loss_history, f1_history, os.path.join(SAVE_DIR, "plots"))
         writer.close()
@@ -159,7 +163,7 @@ def run_train_cnn(config):
         # Évaluation finale sur test set
         if test_dataset is not None:
             print(f"[Fold {fold}] Loading best model and evaluating on test set...")
-            model, _, _ = load_checkpoint(model, optimizer, CHECKPOINT_DIR, fold)
+            model, _, _ = safe_load_checkpoint(model, optimizer, CHECKPOINT_DIR, fold)
             model.eval()
             y_test_true, y_test_pred = [], []
 
@@ -173,7 +177,8 @@ def run_train_cnn(config):
                     y_test_pred.extend(preds.cpu().tolist())
 
             acc, f1, precision, recall = log_metrics(y_test_true, y_test_pred)
-            print(f"[Fold {fold}] Test Accuracy: {acc:.4f} | F1: {f1:.4f} | Precision: {precision:.4f} | Recall: {recall:.4f}")
+            print(
+                f"[Fold {fold}] Test Accuracy: {acc:.4f} | F1: {f1:.4f} | Precision: {precision:.4f} | Recall: {recall:.4f}")
             write_log(log_file,
                       f"\n[Fold {fold}] Test Accuracy: {acc:.4f} | F1: {f1:.4f} | Precision: {precision:.4f} | Recall: {recall:.4f}")
 
@@ -182,8 +187,14 @@ def run_train_cnn(config):
                 "test/accuracy": acc,
                 "test/precision": precision,
                 "test/recall": recall,
-                "fold": fold
+                "fold": fold,
+                "fold/best_f1": best_f1,
+                "fold/best_epoch": best_epoch
             })
+            wandb.run.summary[f"fold_{fold}/test_f1"] = f1
+            wandb.run.summary[f"fold_{fold}/test_accuracy"] = acc
+            wandb.run.summary[f"fold_{fold}/test_precision"] = precision
+            wandb.run.summary[f"fold_{fold}/test_recall"] = recall
 
             log_file.close()
 
@@ -192,6 +203,10 @@ def run_train_cnn(config):
 
 if __name__ == "__main__":
     import yaml
-    with open("configs/config_train_cnn_cifar10.yaml", "r") as f:
-        config = yaml.safe_load(f)
-    run_train_cnn(config)
+
+    try:
+        with open("configs/config_train_cnn_svhn.yaml", "r") as f:
+            config = yaml.safe_load(f)
+        run_train_cnn(config)
+    finally:
+        wandb.finish()

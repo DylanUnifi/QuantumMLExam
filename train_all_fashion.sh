@@ -9,32 +9,32 @@ mkdir -p logs_fashion
 echo "=============================="
 echo "Training Classical MLP..."
 echo "=============================="
-python main.py --model classical --config configs/config_train_classical.yaml | tee logs_fashion/classical.log
+python main.py --model classical --config configs/config_train_classical_fashion.yaml | tee logs_fashion/classical.log
 
 echo "=============================="
 echo "Training CNN..."
 echo "=============================="
-python main.py --model cnn --config configs/config_train_cnn.yaml | tee logs_fashion/cnn.log
+python main.py --model cnn --config configs/config_train_cnn_fashion.yaml | tee logs_fashion/cnn.log
 
 echo "=============================="
 echo "Training Quantum MLP..."
 echo "=============================="
-python main.py --model quantum_mlp --config configs/config_train_quantum_mlp.yaml | tee logs_fashion/quantum_mlp.log
+python main.py --model quantum_mlp --config configs/config_train_quantum_mlp_fashion.yaml | tee logs_fashion/quantum_mlp.log
 
 echo "=============================="
 echo "Training Hybrid QCNN..."
 echo "=============================="
-python main.py --model hybrid_qcnn --config configs/config_train_qcnn.yaml | tee logs_fashion/hybrid_qcnn.log
+python main.py --model hybrid_qcnn --config configs/config_train_qcnn_fashion.yaml | tee logs_fashion/hybrid_qcnn.log
 
 echo "=============================="
 echo "Training Hybrid QCNN + SVM..."
 echo "=============================="
-python main.py --model hybrid_qcnn_svm --config configs/config_train_hybrid_qcnn_svm.yaml | tee logs_fashion/hybrid_qcnn_svm.log
+python main.py --model hybrid_qcnn_svm --config configs/config_train_hybrid_qcnn_svm_fashion.yaml | tee logs_fashion/hybrid_qcnn_svm.log
 
 echo "=============================="
 echo "Training Classical SVM..."
 echo "=============================="
-python main.py --model svm --config configs/config_train_svm.yaml --optimize | tee logs_fashion/svm.log
+python main.py --model svm --config configs/config_train_svm_fashion.yaml --optimize | tee logs_fashion/svm.log
 
 echo "=============================="
 echo "All trainings finished!"

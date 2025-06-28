@@ -5,10 +5,10 @@ dataset:
   binary_classes: [3, 8]     # Classes à utiliser pour la classification binaire
 
 training:
-  batch_size: 64
+  batch_size: 512
   epochs: 20                 # Nombre d'époques pour l'entraînement du feature extractor
   learning_rate: 0.0005      # LR initial pour Adam
-  kfold: 5                   # Nombre de splits pour KFold cross-validation
+  kfold: 3                   # Nombre de splits pour KFold cross-validation
   early_stopping: 5          # Patience d'early stopping
 
 scheduler: "StepLR"          # Options: null, StepLR, MultiStepLR, CosineAnnealingLR

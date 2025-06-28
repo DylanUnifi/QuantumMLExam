@@ -3,12 +3,13 @@ experiment_name: hybrid_qcnn_fashion_mnist_experiment
 dataset:
   name: fashion_mnist
   binary_classes: [3, 8]  # Ex: Pull-over vs Sandal
+  in_channels: 1
 
 training:
-  batch_size: 8
-  epochs: 15
+  batch_size: 512
+  epochs: 20
   learning_rate: 0.001
-  kfold: 5
+  kfold: 3
   early_stopping: 5
 
 model:
@@ -23,3 +24,8 @@ checkpoint:
   subdir: "hybrid_qcnn_fashion_mnist_experiment"
 
 scheduler: "cosine"
+
+quantum:
+  n_qubits: 4
+  layers: 2
+  backend: "lightning.qubit"

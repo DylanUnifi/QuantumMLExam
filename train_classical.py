@@ -1,5 +1,5 @@
 # train_classical.py
-# Version: 3.7 – Ajout résumé final dans le log
+# Version: 4.0 – Ajout résumé wandb complet, logs par fold, évaluation test détaillée
 
 import os
 import torch
@@ -9,7 +9,7 @@ from sklearn.model_selection import KFold
 from torch.utils.tensorboard import SummaryWriter
 from torch.utils.data import DataLoader, Subset
 from models.classical import MLPBinaryClassifier
-from utils.checkpoint import save_checkpoint, load_checkpoint
+from utils.checkpoint import save_checkpoint, safe_load_checkpoint
 from utils.early_stopping import EarlyStopping
 from utils.metrics import log_metrics
 from data_loader.utils import load_dataset_by_name
@@ -17,20 +17,17 @@ from utils.scheduler import get_scheduler
 from utils.visual import save_plots
 from utils.logger import init_logger, write_log
 import wandb
-
+from tqdm import tqdm, trange
 
 
 def run_train_classical(config):
-    # Configuration générale
     EXPERIMENT_NAME = config.get("experiment_name", "default_experiment")
-
-    wandb.init(project="qml_project", name=EXPERIMENT_NAME, config=config)
-    wandb.config.update(config)
-
-    wandb.config.update(config)
     SAVE_DIR = os.path.join("engine/checkpoints", "classical", EXPERIMENT_NAME)
     CHECKPOINT_DIR = os.path.join(SAVE_DIR, "folds")
     os.makedirs(CHECKPOINT_DIR, exist_ok=True)
+
+    wandb.init(project="qml_project", name=EXPERIMENT_NAME, config=config)
+    wandb.config.update(config)
 
     DEVICE = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     BATCH_SIZE = config["training"]["batch_size"]
@@ -40,15 +37,11 @@ def run_train_classical(config):
     PATIENCE = config["training"]["early_stopping"]
     SCHEDULER_TYPE = config.get("scheduler", None)
 
-    # Charger données en TensorDataset
     train_dataset, test_dataset = load_dataset_by_name(
         name=config["dataset"]["name"],
         batch_size=BATCH_SIZE,
         binary_classes=config.get("binary_classes", [3, 8])
     )
-    # Après avoir chargé train_dataset
-    # indices = torch.randperm(len(train_dataset))[:2000]
-    # train_dataset = torch.utils.data.Subset(train_dataset, indices)
     print(f"Nombre d'exemples chargés dans train_dataset : {len(train_dataset)}")
 
     kfold = KFold(n_splits=KFOLD, shuffle=True, random_state=42)
@@ -66,10 +59,9 @@ def run_train_classical(config):
         train_subset = Subset(train_dataset, train_idx)
         val_subset = Subset(train_dataset, val_idx)
 
-        train_loader_fold = DataLoader(train_subset, batch_size=BATCH_SIZE, shuffle=True)
+        train_loader = DataLoader(train_subset, batch_size=BATCH_SIZE, shuffle=True)
         val_loader = DataLoader(val_subset, batch_size=BATCH_SIZE)
 
-        # Obtenir un exemple pour déterminer la taille de l'input
         sample_X, _ = train_dataset[0]
         if isinstance(sample_X, torch.Tensor):
             input_size = sample_X.numel()
@@ -83,7 +75,7 @@ def run_train_classical(config):
 
         start_epoch = 0
         try:
-            model, optimizer, start_epoch = load_checkpoint(model, optimizer, CHECKPOINT_DIR, fold)
+            model, optimizer, start_epoch = safe_load_checkpoint(model, optimizer, CHECKPOINT_DIR, fold)
             print(f"Resuming from epoch {start_epoch}")
         except FileNotFoundError:
             print("No checkpoint found, starting from scratch")
@@ -92,10 +84,10 @@ def run_train_classical(config):
         best_f1, best_epoch = 0, 0
         stopped_early = False
 
-        for epoch in range(start_epoch, EPOCHS):
+        for epoch in trange(start_epoch, EPOCHS, desc=f"[Fold {fold}] Classical MLP Training"):
             model.train()
             total_loss = 0
-            for batch_X, batch_y in train_loader_fold:
+            for batch_X, batch_y in tqdm(train_loader, desc=f"[Fold {fold}] Batches"):
                 batch_X, batch_y = batch_X.view(batch_X.size(0), -1).to(DEVICE), batch_y.to(DEVICE)
                 optimizer.zero_grad()
                 outputs = model(batch_X).squeeze()
@@ -116,8 +108,7 @@ def run_train_classical(config):
                     y_pred.extend(preds.cpu().tolist())
 
             acc, f1, precision, recall = log_metrics(y_true, y_pred)
-
-            val_loss = total_loss / len(train_loader_fold)
+            val_loss = total_loss / len(train_loader)
 
             writer.add_scalar("Loss/train", val_loss, epoch)
             writer.add_scalar("F1/val", f1, epoch)
@@ -125,32 +116,36 @@ def run_train_classical(config):
             writer.add_scalar("Precision/val", precision, epoch)
             writer.add_scalar("Recall/val", recall, epoch)
 
+            wandb.log({
+                "train/loss": val_loss,
+                "val/f1": f1,
+                "val/accuracy": acc,
+                "val/precision": precision,
+                "val/recall": recall,
+                "epoch": epoch,
+                "fold": fold,
+            })
+
             write_log(log_file,
                       f"[Epoch {epoch}] Loss: {val_loss:.4f} | F1: {f1:.4f} | Acc: {acc:.4f} | Prec: {precision:.4f} | Rec: {recall:.4f}")
 
             loss_history.append(val_loss)
             f1_history.append(f1)
 
-            # 📊 Log des métriques à wandb
-            wandb.log({
-                "train/accuracy": acc,
-                "train/f1": f1,
-                "train/recall": recall,
-                "train/loss": val_loss,
-                "epoch": epoch,
-                "fold": fold
-            })
-
             print(f"[Fold {fold}][Epoch {epoch}] Loss: {val_loss:.4f} | F1: {f1:.4f}")
 
             if f1 > best_f1:
                 best_f1 = f1
                 best_epoch = epoch
-                save_checkpoint(model, optimizer, epoch, CHECKPOINT_DIR, fold, best_f1)
+                # Sauvegarde finale du modèle s'il n'y a pas eu de meilleur F1
+                if not os.path.isfile(os.path.join(CHECKPOINT_DIR, f"fold_{fold}.pth")):
+                    print(f"[Fold {fold}] No best model saved during training; saving final model at last epoch.")
+                    save_checkpoint(model, optimizer, epoch, CHECKPOINT_DIR, fold, best_f1)
+
                 write_log(log_file, f"[Epoch {epoch}] New best F1: {f1:.4f} (Saved model)")
 
-                wandb.run.summary["best_f1"] = best_f1
-                wandb.run.summary["best_epoch"] = best_epoch
+                wandb.run.summary[f"fold_{fold}/best_f1"] = best_f1
+                wandb.run.summary[f"fold_{fold}/best_epoch"] = best_epoch
 
             if early_stopping(f1):
                 print("Early stopping triggered.")
@@ -161,6 +156,9 @@ def run_train_classical(config):
             if scheduler:
                 scheduler.step()
 
+        wandb.run.summary[f"fold_{fold}/best_f1"] = best_f1
+        wandb.run.summary[f"fold_{fold}/best_epoch"] = best_epoch
+
         save_plots(fold, loss_history, f1_history, os.path.join(SAVE_DIR, "plots"))
         writer.close()
 
@@ -170,16 +168,20 @@ def run_train_classical(config):
         else:
             write_log(log_file, f"Training completed full {EPOCHS} epochs\n")
 
-
         # Évaluation finale sur test set
         if test_dataset is not None:
             print(f"[Fold {fold}] Loading best model and evaluating on test set...")
-            model, _, _ = load_checkpoint(model, optimizer, CHECKPOINT_DIR, fold)
+            try:
+                model, _, _ = safe_load_checkpoint(model, optimizer, CHECKPOINT_DIR, fold)
+            except FileNotFoundError:
+                print(f"[Fold {fold}] Aucun checkpoint trouvé; évaluation du test set annulée pour ce fold.")
+                log_file.close()
+                continue
+
             model.eval()
             y_test_true, y_test_pred = [], []
 
-            test_loader = DataLoader(test_dataset, batch_size=BATCH_SIZE)  # AJOUT
-
+            test_loader = DataLoader(test_dataset, batch_size=BATCH_SIZE)
             with torch.no_grad():
                 for batch_X, batch_y in test_loader:
                     batch_X, batch_y = batch_X.view(batch_X.size(0), -1).to(DEVICE), batch_y.to(DEVICE)
@@ -189,25 +191,33 @@ def run_train_classical(config):
                     y_test_pred.extend(preds.cpu().tolist())
 
             acc, f1, precision, recall = log_metrics(y_test_true, y_test_pred)
-            print(
-                f"[Fold {fold}] Test Accuracy: {acc:.4f} | F1: {f1:.4f} | Precision: {precision:.4f} | Recall: {recall:.4f}")
+            print(f"[Fold {fold}] Test Accuracy: {acc:.4f} | F1: {f1:.4f} | Precision: {precision:.4f} | Recall: {recall:.4f}")
             write_log(log_file,
                       f"\n[Fold {fold}] Test Accuracy: {acc:.4f} | F1: {f1:.4f} | Precision: {precision:.4f} | Recall: {recall:.4f}")
-            log_file.close()
 
-        wandb.log({
-            "fold/best_f1": best_f1,
-            "fold/best_epoch": best_epoch,
-            "fold": fold
-        })
+            wandb.log({
+                "test/f1": f1,
+                "test/accuracy": acc,
+                "test/precision": precision,
+                "test/recall": recall,
+                "fold/best_f1": best_f1,
+                "fold/best_epoch": best_epoch,
+                "fold": fold
+            })
+
+            wandb.run.summary[f"fold_{fold}/test_f1"] = f1
+            wandb.run.summary[f"fold_{fold}/test_accuracy"] = acc
+            wandb.run.summary[f"fold_{fold}/test_precision"] = precision
+            wandb.run.summary[f"fold_{fold}/test_recall"] = recall
+
+            log_file.close()
 
     print("Training and evaluation complete.")
 
 
 if __name__ == "__main__":
     import yaml
-    # Charger config
-    with open("/data01/pc24dylfou/PycharmProjects/qml_Project/configs/config_train_classical.yaml", "r") as f:
+    with open("configs/config_train_classical_cifar10.yaml", "r") as f:
         config = yaml.safe_load(f)
     run_train_classical(config)
     wandb.finish()
