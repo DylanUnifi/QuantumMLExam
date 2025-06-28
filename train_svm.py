@@ -15,6 +15,7 @@ from utils.logger import init_logger, write_log
 from data_loader.utils import load_dataset_by_name
 from models.svm_extension import EnhancedSVM
 from utils.metrics import log_metrics
+import wandb
 
 
 def objective(trial, X_train, y_train, X_val, y_val, log_file):
@@ -34,6 +35,10 @@ def run_train_svm(config):
     SAVE_DIR = os.path.join("engine/checkpoints", "svm", EXPERIMENT_NAME)
     LOG_DIR = os.path.join(SAVE_DIR, "logs")
     os.makedirs(SAVE_DIR, exist_ok=True)
+
+    wandb.init(project="qml_project", name=EXPERIMENT_NAME, config=config)
+    wandb.config.update(config)
+
     os.makedirs(LOG_DIR, exist_ok=True)
 
     batch_size = config["training"]["batch_size"]
@@ -117,6 +122,6 @@ def run_train_svm(config):
 
 if __name__ == "__main__":
     import yaml
-    with open("/data01/pc24dylfou/PycharmProjects/qml_Project/configs/config_train_svm.yaml", "r") as f:
+    with open("/configs/config_train_svm_fashion.yaml", "r") as f:
         config = yaml.safe_load(f)
     run_train_svm(config)

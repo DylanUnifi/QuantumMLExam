@@ -17,6 +17,7 @@ from data_loader.utils import load_dataset_by_name
 from utils.scheduler import get_scheduler
 from utils.visual import save_plots
 from utils.logger import init_logger, write_log
+import wandb
 
 
 def run_train_cnn(config):
@@ -25,7 +26,10 @@ def run_train_cnn(config):
     CHECKPOINT_DIR = os.path.join(SAVE_DIR, "folds")
     os.makedirs(CHECKPOINT_DIR, exist_ok=True)
 
-    DEVICE = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
+    wandb.init(project="qml_project", name=EXPERIMENT_NAME, config=config)
+    wandb.config.update(config)
+
+    DEVICE = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     BATCH_SIZE = config["training"]["batch_size"]
     EPOCHS = config["training"]["epochs"]
     LR = config["training"]["learning_rate"]
@@ -107,6 +111,16 @@ def run_train_cnn(config):
             writer.add_scalar("Precision/val", precision, epoch)
             writer.add_scalar("Recall/val", recall, epoch)
 
+            wandb.log({
+                "train/loss": val_loss,
+                "train/f1": f1,
+                "train/accuracy": acc,
+                "train/precision": precision,
+                "train/recall": recall,
+                "epoch": epoch,
+                "fold": fold
+            })
+
             write_log(log_file,
                       f"[Epoch {epoch}] Loss: {val_loss:.4f} | F1: {f1:.4f} | Acc: {acc:.4f} | Prec: {precision:.4f} | Rec: {recall:.4f}")
 
@@ -120,6 +134,9 @@ def run_train_cnn(config):
                 best_epoch = epoch
                 save_checkpoint(model, optimizer, epoch, CHECKPOINT_DIR, fold, best_f1)
                 write_log(log_file, f"[Epoch {epoch}] New best F1: {f1:.4f} (Saved model)")
+
+                wandb.run.summary["best_f1"] = best_f1
+                wandb.run.summary["best_epoch"] = best_epoch
 
             if early_stopping(f1):
                 print("Early stopping triggered.")
@@ -159,6 +176,15 @@ def run_train_cnn(config):
             print(f"[Fold {fold}] Test Accuracy: {acc:.4f} | F1: {f1:.4f} | Precision: {precision:.4f} | Recall: {recall:.4f}")
             write_log(log_file,
                       f"\n[Fold {fold}] Test Accuracy: {acc:.4f} | F1: {f1:.4f} | Precision: {precision:.4f} | Recall: {recall:.4f}")
+
+            wandb.log({
+                "test/f1": f1,
+                "test/accuracy": acc,
+                "test/precision": precision,
+                "test/recall": recall,
+                "fold": fold
+            })
+
             log_file.close()
 
     print("CNN Training and evaluation complete.")
@@ -166,6 +192,6 @@ def run_train_cnn(config):
 
 if __name__ == "__main__":
     import yaml
-    with open("/data01/pc24dylfou/PycharmProjects/qml_Project/configs/config_train_cnn.yaml", "r") as f:
+    with open("configs/config_train_cnn_cifar10.yaml", "r") as f:
         config = yaml.safe_load(f)
     run_train_cnn(config)

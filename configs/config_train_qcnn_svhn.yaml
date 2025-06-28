@@ -1,0 +1,22 @@
+experiment_name: "hybrid_qcnn_svhn_exp"
+
+dataset:
+  name: "svhn"
+  binary_classes: [3, 8]
+
+training:
+  batch_size: 64
+  epochs: 20
+  learning_rate: 0.0005
+  kfold: 5
+  early_stopping: 5
+
+scheduler: "StepLR"
+scheduler_params:
+  step_size: 10
+  gamma: 0.5
+
+quantum:
+  n_qubits: 4
+  layers: 2
+  backend: "lightning.qubit"

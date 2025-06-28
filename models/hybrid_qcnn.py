@@ -83,6 +83,27 @@ class HybridQCNNBinaryClassifier(nn.Module):
         return torch.sigmoid(x)
 
 
+class HybridQCNNFeatures(nn.Module):
+    def __init__(self, input_size, hidden_sizes=[32, 16, 8]):
+        super(HybridQCNNFeatures, self).__init__()
+        self.block1 = ResidualMLPBlock(input_size, hidden_sizes[0], downsample=True)
+        self.block2 = ResidualMLPBlock(hidden_sizes[0], hidden_sizes[1], downsample=True)
+        self.block3 = ResidualMLPBlock(hidden_sizes[1], hidden_sizes[2], downsample=True)
+        self.quantum_fc_input = nn.Linear(hidden_sizes[2], n_qubits)
+        self.quantum_layer = quantum_layer
+        self.dropout = nn.Dropout(0.3)
+        self.final_fc = nn.Linear(n_qubits, 1)
+
+    def forward(self, x):
+        x = self.block1(x)
+        x = self.block2(x)
+        x = self.block3(x)
+        x = self.dropout(x)
+        x = torch.tanh(self.quantum_fc_input(x))  # bounded input for quantum
+
+        return x
+
+
 # Auto-visualize when module is imported standalone
 if __name__ == '__main__':
     visualize_quantum_circuit()

@@ -7,7 +7,7 @@ import torch.nn as nn
 import torch.optim as optim
 from sklearn.model_selection import KFold
 from torch.utils.tensorboard import SummaryWriter
-from torch.utils.data import DataLoader
+from torch.utils.data import DataLoader, Subset
 from models.hybrid_qclassical import QuantumResidualMLP
 from utils.checkpoint import save_checkpoint, load_checkpoint
 from utils.early_stopping import EarlyStopping
@@ -16,15 +16,20 @@ from utils.logger import init_logger, write_log
 from utils.metrics import log_metrics
 from utils.visual import save_plots
 from data_loader.utils import load_dataset_by_name
+import wandb
 
 
 def run_train_quantum_mlp(config):
     EXPERIMENT_NAME = config.get("experiment_name", "quantum_mlp_exp")
+
+    wandb.init(project="qml_project", name=EXPERIMENT_NAME, config=config)
+    wandb.config.update(config)
+
     SAVE_DIR = os.path.join("engine/checkpoints", "quantum_mlp", EXPERIMENT_NAME)
     CHECKPOINT_DIR = os.path.join(SAVE_DIR, "folds")
     os.makedirs(CHECKPOINT_DIR, exist_ok=True)
 
-    DEVICE = torch.device("cuda:1" if torch.cuda.is_available() else "cpu")
+    DEVICE = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     BATCH_SIZE = config["training"]["batch_size"]
     EPOCHS = config["training"]["epochs"]
     LR = config["training"]["learning_rate"]
@@ -38,6 +43,9 @@ def run_train_quantum_mlp(config):
         batch_size=BATCH_SIZE,
         binary_classes=config.get("binary_classes", [0, 1])
     )
+
+    indices = torch.randperm(len(train_dataset))[:2000]
+    train_dataset = Subset(train_dataset, indices)
 
     print(f"Nombre d'exemples chargés dans train_dataset : {len(train_dataset)}")
 
@@ -115,6 +123,16 @@ def run_train_quantum_mlp(config):
             loss_history.append(val_loss)
             f1_history.append(f1)
 
+            # 📊 Log des métriques à wandb
+            wandb.log({
+                "train/accuracy": acc,
+                "train/f1": f1,
+                "train/recall": recall,
+                "train/loss": val_loss,
+                "epoch": epoch,
+                "fold": fold
+            })
+
             print(f"[Fold {fold}][Epoch {epoch}] Loss: {val_loss:.4f} | F1: {f1:.4f}")
 
             if f1 > best_f1:
@@ -122,6 +140,9 @@ def run_train_quantum_mlp(config):
                 best_epoch = epoch
                 save_checkpoint(model, optimizer, epoch, CHECKPOINT_DIR, fold, best_f1)
                 write_log(log_file, f"[Epoch {epoch}] New best F1: {f1:.4f} (Saved model)")
+
+                wandb.run.summary["best_f1"] = best_f1
+                wandb.run.summary["best_epoch"] = best_epoch
 
             if early_stopping(f1):
                 print("Early stopping triggered.")
@@ -140,13 +161,42 @@ def run_train_quantum_mlp(config):
             write_log(log_file, f"Training stopped early before reaching max epochs ({EPOCHS})\n")
         else:
             write_log(log_file, f"Training completed full {EPOCHS} epochs\n")
-        log_file.close()
+
+        # Évaluation finale sur test set
+        if test_dataset is not None:
+            print(f"[Fold {fold}] Loading best model and evaluating on test set...")
+            model, _, _ = load_checkpoint(model, optimizer, CHECKPOINT_DIR, fold)
+            model.eval()
+            y_test_true, y_test_pred = [], []
+
+            test_loader = DataLoader(test_dataset, batch_size=BATCH_SIZE)  # AJOUT
+
+            with torch.no_grad():
+                for batch_X, batch_y in test_loader:
+                    batch_X, batch_y = batch_X.view(batch_X.size(0), -1).to(DEVICE), batch_y.to(DEVICE)
+                    preds = model(batch_X).squeeze()
+                    preds = (preds >= 0.5).float()
+                    y_test_true.extend(batch_y.tolist())
+                    y_test_pred.extend(preds.cpu().tolist())
+
+            acc, f1, precision, recall = log_metrics(y_test_true, y_test_pred)
+            print(
+                f"[Fold {fold}] Test Accuracy: {acc:.4f} | F1: {f1:.4f} | Precision: {precision:.4f} | Recall: {recall:.4f}")
+            write_log(log_file,
+                      f"\n[Fold {fold}] Test Accuracy: {acc:.4f} | F1: {f1:.4f} | Precision: {precision:.4f} | Recall: {recall:.4f}")
+            log_file.close()
+
+        wandb.log({
+            "fold/best_f1": best_f1,
+            "fold/best_epoch": best_epoch,
+            "fold": fold
+        })
 
     print("Quantum MLP training complete.")
 
 
 if __name__ == "__main__":
     import yaml
-    with open("/data01/pc24dylfou/PycharmProjects/qml_Project/configs/config_train_quantum_mlp.yaml", "r") as f:
+    with open("/configs/config_train_quantum_mlp_fashion.yaml", "r") as f:
         config = yaml.safe_load(f)
     run_train_quantum_mlp(config)

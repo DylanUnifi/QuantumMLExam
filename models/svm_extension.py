@@ -7,7 +7,6 @@ from sklearn.metrics import accuracy_score, f1_score, precision_score, recall_sc
 from sklearn.base import BaseEstimator, ClassifierMixin
 import joblib
 import torch
-import numpy as np
 
 class EnhancedSVM(BaseEstimator, ClassifierMixin):
     def __init__(self, C=1.0, kernel='rbf', gamma='scale', use_pca=False, pca_model=None, save_path=None):
