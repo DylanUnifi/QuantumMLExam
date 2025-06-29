@@ -1,4 +1,4 @@
-experiment_name: "mlp_baseline_v1"
+experiment_name: "classical_fashion_exp"
 
 dataset:
   name: "fashion_mnist"             # Options: fashion_mnist, cifar10, svhn

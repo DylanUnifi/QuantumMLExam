@@ -1,4 +1,4 @@
-experiment_name: cnn_fashionmnist_experiment
+experiment_name: cnn_fashion_experiment
 
 dataset:
   name: fashion_mnist

@@ -1,4 +1,4 @@
-experiment_name: "quantum_mlp_mnist"
+experiment_name: "quantum_mlp_fashion_exp"
 
 dataset:
   name: "fashion_mnist"

@@ -1,4 +1,4 @@
-experiment_name: hybrid_qcnn_fashion_mnist_experiment
+experiment_name: "hybrid_qcnn_fashion_exp"
 
 dataset:
   name: fashion_mnist

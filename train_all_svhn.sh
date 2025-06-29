@@ -1,4 +1,5 @@
 #!/bin/bash
+export CUDA_VISIBLE_DEVICES=1
 
 # Script : train_all_svhn.sh
 # But : entraîner tous les modèles pertinents sur SVHN avec main.py

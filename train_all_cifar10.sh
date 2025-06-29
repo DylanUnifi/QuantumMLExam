@@ -1,4 +1,5 @@
 #!/bin/bash
+export CUDA_VISIBLE_DEVICES=0
 
 # Script : train_all_cifar10.sh
 # But : entraîner tous les modèles pertinents sur CIFAR-10 avec main.py

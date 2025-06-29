@@ -10,7 +10,7 @@ training:
   epochs: 50
   learning_rate: 0.001
   kfold: 3
-  early_stopping: 5
+  early_stopping: 15
   scheduler: "StepLR"
 
 model:

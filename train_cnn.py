@@ -1,5 +1,5 @@
 # train_cnn.py
-# Version: 4.0 – Ajout logs complets par fold, résumé wandb, harmonisation
+# Version: 4.1 – Ajout logs AUC et balanced accuracy sur le test set
 
 import os
 import torch
@@ -8,6 +8,7 @@ import torch.optim as optim
 from torch.utils.data import Subset, DataLoader
 from sklearn.model_selection import KFold
 from torch.utils.tensorboard import SummaryWriter
+from sklearn.metrics import roc_auc_score, balanced_accuracy_score  # 🔥 Ajout
 
 from models.cnn import CNNBinaryClassifier
 from utils.checkpoint import save_checkpoint, safe_load_checkpoint
@@ -22,7 +23,10 @@ import wandb
 
 
 def run_train_cnn(config):
-    EXPERIMENT_NAME = config.get("experiment_name", "cnn_exp")
+    dataset_name = config["dataset"]["name"]  # Ex: "fashion-mnist", "cifar10", "svhn"
+    base_exp_name = config.get("experiment_name", "default_exp")
+    EXPERIMENT_NAME = f"{dataset_name}_{base_exp_name}"
+
     SAVE_DIR = os.path.join("engine/checkpoints", "cnn", EXPERIMENT_NAME)
     CHECKPOINT_DIR = os.path.join(SAVE_DIR, "folds")
     os.makedirs(CHECKPOINT_DIR, exist_ok=True)
@@ -46,7 +50,7 @@ def run_train_cnn(config):
         name=config["dataset"]["name"],
         batch_size=BATCH_SIZE,
         binary_classes=config.get("binary_classes", [3, 8]),
-        grayscale=config["dataset"].get("grayscale", None)  # 🔥 récupère du yaml
+        grayscale=config["dataset"].get("grayscale", None)
     )
 
     indices = torch.randperm(len(train_dataset))[:3000]
@@ -127,8 +131,7 @@ def run_train_cnn(config):
                 "val/recall": recall,
             })
 
-            write_log(log_file,
-                      f"[Epoch {epoch}] Loss: {val_loss:.4f} | F1: {f1:.4f} | Acc: {acc:.4f} | Prec: {precision:.4f} | Rec: {recall:.4f}")
+            write_log(log_file, f"[Epoch {epoch}] Loss: {val_loss:.4f} | F1: {f1:.4f} | Acc: {acc:.4f} | Prec: {precision:.4f} | Rec: {recall:.4f}")
 
             loss_history.append(val_loss)
             f1_history.append(f1)
@@ -172,31 +175,37 @@ def run_train_cnn(config):
                 model, _, _ = safe_load_checkpoint(model, optimizer, CHECKPOINT_DIR, fold)
             except FileNotFoundError:
                 print(f"[Fold {fold}] Aucun checkpoint trouvé; évaluation du test set annulée pour ce fold.")
-                log_file.close()
-                continue
+
             model.eval()
-            y_test_true, y_test_pred = [], []
+            y_test_true, y_test_pred, y_test_probs = [], [], []
 
             test_loader = DataLoader(test_dataset, batch_size=BATCH_SIZE)
             with torch.no_grad():
                 for batch_X, batch_y in test_loader:
                     batch_X, batch_y = batch_X.to(DEVICE), batch_y.to(DEVICE)
-                    preds = model(batch_X).squeeze()
-                    preds = (preds >= 0.5).float()
+                    outputs = model(batch_X).squeeze()
+                    preds = (outputs >= 0.5).float()
                     y_test_true.extend(batch_y.tolist())
                     y_test_pred.extend(preds.cpu().tolist())
+                    y_test_probs.extend(outputs.cpu().tolist())
 
             acc, f1, precision, recall = log_metrics(y_test_true, y_test_pred)
-            print(
-                f"[Fold {fold}] Test Accuracy: {acc:.4f} | F1: {f1:.4f} | Precision: {precision:.4f} | Recall: {recall:.4f}")
-            write_log(log_file,
-                      f"\n[Fold {fold}] Test Accuracy: {acc:.4f} | F1: {f1:.4f} | Precision: {precision:.4f} | Recall: {recall:.4f}")
+            try:
+                auc = roc_auc_score(y_test_true, y_test_probs)
+            except ValueError:
+                auc = float('nan')
+            balanced_acc = balanced_accuracy_score(y_test_true, y_test_pred)
+
+            print(f"[Fold {fold}] Test Accuracy: {acc:.4f} | F1: {f1:.4f} | Precision: {precision:.4f} | Recall: {recall:.4f} | AUC: {auc:.4f} | Balanced Acc: {balanced_acc:.4f}")
+            write_log(log_file, f"\n[Fold {fold}] Test Accuracy: {acc:.4f} | F1: {f1:.4f} | Precision: {precision:.4f} | Recall: {recall:.4f} | AUC: {auc:.4f} | Balanced Acc: {balanced_acc:.4f}")
 
             wandb.log({
                 f"test/f1": f1,
                 f"test/accuracy": acc,
                 f"test/precision": precision,
                 f"test/recall": recall,
+                f"test/auc": auc,
+                f"test/balanced_accuracy": balanced_acc,
             })
 
             log_file.close()
@@ -207,10 +216,6 @@ def run_train_cnn(config):
 
 if __name__ == "__main__":
     import yaml
-
-    try:
-        with open("configs/config_train_cnn_fashion.yaml", "r") as f:
-            config = yaml.safe_load(f)
-        run_train_cnn(config)
-    finally:
-        wandb.finish()
+    with open("configs/config_train_cnn_fashion.yaml", "r") as f:
+        config = yaml.safe_load(f)
+    run_train_cnn(config)

@@ -1,6 +1,3 @@
-# train_svm.py
-# Version: 3.9 – PCA cohérente, réentraînement final sur full set, logging structuré
-
 import os
 import joblib
 import optuna
@@ -8,7 +5,7 @@ import matplotlib.pyplot as plt
 from sklearn.decomposition import PCA
 from sklearn.model_selection import train_test_split
 from sklearn.preprocessing import StandardScaler
-from sklearn.metrics import confusion_matrix, ConfusionMatrixDisplay
+from sklearn.metrics import confusion_matrix, ConfusionMatrixDisplay, roc_auc_score, balanced_accuracy_score
 import torch
 from torch.utils.data import Subset
 
@@ -24,7 +21,7 @@ def objective(trial, X_train, y_train, X_val, y_val, log_file):
     kernel = trial.suggest_categorical('kernel', ['linear', 'rbf', 'poly'])
     gamma = trial.suggest_categorical('gamma', ['scale', 'auto'])
 
-    model = EnhancedSVM(C=C, kernel=kernel, gamma=gamma)
+    model = EnhancedSVM(C=C, kernel=kernel, gamma=gamma, probability=True)  # 👈 Active predict_proba
     model.fit(X_train, y_train)
     metrics = model.evaluate(X_val, y_val)
     write_log(log_file, f"Trial: {trial.number} | Params: {trial.params} | F1: {metrics['f1']:.4f}")
@@ -32,9 +29,11 @@ def objective(trial, X_train, y_train, X_val, y_val, log_file):
     return 1.0 - metrics['f1']
 
 
-
 def run_train_svm(config):
-    EXPERIMENT_NAME = config.get("experiment_name", "svm_exp")
+    dataset_name = config["dataset"]["name"]
+    base_exp_name = config.get("experiment_name", "default_exp")
+    EXPERIMENT_NAME = f"{dataset_name}_{base_exp_name}"
+
     SAVE_DIR = os.path.join("engine/checkpoints", "svm", EXPERIMENT_NAME)
     LOG_DIR = os.path.join(SAVE_DIR, "logs")
     os.makedirs(SAVE_DIR, exist_ok=True)
@@ -48,7 +47,6 @@ def run_train_svm(config):
     os.makedirs(LOG_DIR, exist_ok=True)
 
     batch_size = config["training"]["batch_size"]
-    dataset_name = config["dataset"]["name"]
     binary_classes = config.get("binary_classes", [3, 8])
     use_pca = config["svm"].get("use_pca", False)
     pca_components = config["svm"].get("pca_components", 50)
@@ -74,7 +72,6 @@ def run_train_svm(config):
     scaler = StandardScaler()
     X = scaler.fit_transform(X)
 
-    # Split avant PCA pour éviter d'entraîner PCA sur val
     X_train, X_val, y_train, y_val = train_test_split(X, y, test_size=0.2, random_state=42)
 
     pca = None
@@ -91,26 +88,38 @@ def run_train_svm(config):
     best_params = study.best_params
     write_log(log_file, f"\nBest Params: {best_params}\n")
 
-    final_model = EnhancedSVM(**best_params, use_pca=use_pca, pca_model=pca, save_path=SAVE_DIR)
+    final_model = EnhancedSVM(**best_params, use_pca=use_pca, pca_model=pca, save_path=SAVE_DIR, probability=True)
     final_model.fit(X_train_pca, y_train)
     final_model.save()
 
     metrics = final_model.evaluate(X_val_pca, y_val)
-    write_log(log_file, f"Final Evaluation Metrics on Validation: {metrics}\n")
+    try:
+        y_pred_proba_val = final_model.predict_proba(X_val_pca)[:, 1]
+        roc_auc = roc_auc_score(y_val, y_pred_proba_val)
+    except Exception as e:
+        print(f"[Warning] Could not compute ROC AUC on val set: {e}")
+        roc_auc = float("nan")
+
+    bal_acc = balanced_accuracy_score(y_val, final_model.predict(X_val_pca))
+
+    write_log(log_file, f"Final Evaluation Metrics on Validation: {metrics}, Balanced Acc: {bal_acc:.4f}, ROC AUC: {roc_auc:.4f}\n")
     wandb.log({
         "val/f1": metrics["f1"],
         "val/accuracy": metrics["accuracy"],
         "val/precision": metrics["precision"],
-        "val/recall": metrics["recall"]
+        "val/recall": metrics["recall"],
+        "val/balanced_accuracy": bal_acc,
+        "val/roc_auc": roc_auc
     })
 
     y_pred_val = final_model.predict(X_val_pca)
     cm = confusion_matrix(y_val, y_pred_val)
     disp = ConfusionMatrixDisplay(confusion_matrix=cm)
+    cm_path = os.path.join(SAVE_DIR, "confusion_matrix_val.png")
     disp.plot()
-    plt.savefig(os.path.join(SAVE_DIR, "confusion_matrix_val.png"))
+    plt.savefig(cm_path)
     plt.close()
-    wandb.log({"confusion_matrix_val": wandb.Image(os.path.join(SAVE_DIR, "confusion_matrix_val.png"))})
+    wandb.log({"confusion_matrix_val": wandb.Image(cm_path)})
 
     if test_dataset is not None:
         test_loader = torch.utils.data.DataLoader(test_dataset, batch_size=len(test_dataset))
@@ -122,8 +131,25 @@ def run_train_svm(config):
 
         y_pred_test = final_model.predict(X_test)
         acc, f1, precision, recall = log_metrics(y_test, y_pred_test)
-        write_log(log_file,
-                  f"\nTest Metrics: acc={acc:.4f}, f1={f1:.4f}, precision={precision:.4f}, recall={recall:.4f}")
+
+        try:
+            y_pred_proba_test = final_model.predict_proba(X_test)[:, 1]
+            roc_auc_test = roc_auc_score(y_test, y_pred_proba_test)
+        except Exception as e:
+            print(f"[Warning] Could not compute ROC AUC on test set: {e}")
+            roc_auc_test = float("nan")
+
+        bal_acc_test = balanced_accuracy_score(y_test, y_pred_test)
+
+        write_log(log_file, f"\nTest Metrics: acc={acc:.4f}, f1={f1:.4f}, precision={precision:.4f}, recall={recall:.4f}, Balanced Acc={bal_acc_test:.4f}, ROC AUC={roc_auc_test:.4f}")
+        wandb.log({
+            "test/f1": f1,
+            "test/accuracy": acc,
+            "test/precision": precision,
+            "test/recall": recall,
+            "test/balanced_accuracy": bal_acc_test,
+            "test/roc_auc": roc_auc_test
+        })
 
         cm_test = confusion_matrix(y_test, y_pred_test)
         disp_test = ConfusionMatrixDisplay(confusion_matrix=cm_test)
@@ -131,20 +157,12 @@ def run_train_svm(config):
         disp_test.plot()
         plt.savefig(cm_test_path)
         plt.close()
-
-        wandb.log({
-            f"test/f1": f1,
-            f"test/accuracy": acc,
-            f"test/precision": precision,
-            f"test/recall": recall,
-        })
+        wandb.log({"confusion_matrix_test": wandb.Image(cm_test_path)})
 
     joblib.dump(study, os.path.join(SAVE_DIR, "optuna_study.pkl"))
     log_file.close()
     print("SVM training complete.")
     wandb.finish()
-
-
 
 if __name__ == "__main__":
     import yaml

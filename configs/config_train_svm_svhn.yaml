@@ -1,14 +1,16 @@
 experiment_name: "svm_svhn_exp"
 
 dataset:
-  name: "svhn"
+  name: svhn
   binary_classes: [3, 8]
 
 training:
   batch_size: 256
-  epochs: 1  # Dummy value, SVM ne s'entraîne pas par epochs mais ton loader attend peut-être cette clé
+  epochs: 1  # Dummy value
 
 svm:
+  use_pca: false
+  pca_components: 50
   optimize: true
   n_trials: 30
   kernel_options: ["rbf", "poly", "sigmoid"]

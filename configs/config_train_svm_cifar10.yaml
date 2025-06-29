@@ -1,14 +1,16 @@
 experiment_name: "svm_cifar10_exp"
 
 dataset:
-  name: "cifar10"
+  name: cifar10
   binary_classes: [3, 8]
 
 training:
-  epochs: 1  # Dummy value, SVM ne s'entraîne pas par epochs mais ton loader attend peut-être cette clé
+  epochs: 1  # Dummy value
   batch_size: 256
 
 svm:
+  use_pca: false
+  pca_components: 50
   optimize: true
   n_trials: 30
   kernel_options: ["rbf", "poly", "sigmoid"]

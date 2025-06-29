@@ -1,5 +1,5 @@
 # train_classical.py
-# Version: 4.0 – Ajout résumé wandb complet, logs par fold, évaluation test détaillée
+# Version: 4.2 – Ajout du logging AUC et balanced accuracy pour l’évaluation test
 
 import os
 import torch
@@ -18,10 +18,12 @@ from utils.visual import save_plots
 from utils.logger import init_logger, write_log
 import wandb
 from tqdm import tqdm, trange
-
+from sklearn.metrics import roc_auc_score, balanced_accuracy_score  # 🔥 Ajout
 
 def run_train_classical(config):
-    EXPERIMENT_NAME = config.get("experiment_name", "default_experiment")
+    dataset_name = config["dataset"]["name"]  # Ex: "fashion-mnist", "cifar10", "svhn"
+    base_exp_name = config.get("experiment_name", "default_exp")
+    EXPERIMENT_NAME = f"{dataset_name}_{base_exp_name}"
     SAVE_DIR = os.path.join("engine/checkpoints", "classical", EXPERIMENT_NAME)
     CHECKPOINT_DIR = os.path.join(SAVE_DIR, "folds")
     os.makedirs(CHECKPOINT_DIR, exist_ok=True)
@@ -54,7 +56,6 @@ def run_train_classical(config):
     kfold = KFold(n_splits=KFOLD, shuffle=True, random_state=42)
 
     for fold, (train_idx, val_idx) in enumerate(kfold.split(train_dataset)):
-
         print(f"[Fold {fold}] Starting training...")
 
         writer = SummaryWriter(log_dir=os.path.join(SAVE_DIR, f"fold_{fold}"))
@@ -70,10 +71,7 @@ def run_train_classical(config):
         val_loader = DataLoader(val_subset, batch_size=BATCH_SIZE)
 
         sample_X, _ = train_dataset[0]
-        if isinstance(sample_X, torch.Tensor):
-            input_size = sample_X.numel()
-        else:
-            raise ValueError("Échantillon de train_dataset n'est pas un Tensor.")
+        input_size = sample_X.numel()
 
         model = MLPBinaryClassifier(input_size=input_size, hidden_sizes=config["model"]["hidden_sizes"]).to(DEVICE)
         optimizer = optim.Adam(model.parameters(), lr=LR)
@@ -85,7 +83,7 @@ def run_train_classical(config):
             model, optimizer, start_epoch = safe_load_checkpoint(model, optimizer, CHECKPOINT_DIR, fold)
             print(f"Resuming from epoch {start_epoch}")
         except FileNotFoundError:
-            print("No checkpoint found, starting from scratch")
+            print(f"[Fold {fold}] Aucun checkpoint trouvé; utilisation du dernier modèle entraîné pour le test.")
 
         loss_history, f1_history = [], []
         best_f1, best_epoch = 0, 0
@@ -131,8 +129,7 @@ def run_train_classical(config):
                 "val/recall": recall,
             })
 
-            write_log(log_file,
-                      f"[Epoch {epoch}] Loss: {val_loss:.4f} | F1: {f1:.4f} | Acc: {acc:.4f} | Prec: {precision:.4f} | Rec: {recall:.4f}")
+            write_log(log_file, f"[Epoch {epoch}] Loss: {val_loss:.4f} | F1: {f1:.4f} | Acc: {acc:.4f} | Prec: {precision:.4f} | Rec: {recall:.4f}")
 
             loss_history.append(val_loss)
             f1_history.append(f1)
@@ -142,11 +139,7 @@ def run_train_classical(config):
             if f1 > best_f1:
                 best_f1 = f1
                 best_epoch = epoch
-                # Sauvegarde finale du modèle s'il n'y a pas eu de meilleur F1
-                if not os.path.isfile(os.path.join(CHECKPOINT_DIR, f"fold_{fold}.pth")):
-                    print(f"[Fold {fold}] No best model saved during training; saving final model at last epoch.")
-                    save_checkpoint(model, optimizer, epoch, CHECKPOINT_DIR, fold, best_f1)
-
+                save_checkpoint(model, optimizer, epoch, CHECKPOINT_DIR, fold, best_f1)
                 write_log(log_file, f"[Epoch {epoch}] New best F1: {f1:.4f} (Saved model)")
 
                 wandb.run.summary[f"fold_{fold}/best_f1"] = best_f1
@@ -179,39 +172,44 @@ def run_train_classical(config):
             try:
                 model, _, _ = safe_load_checkpoint(model, optimizer, CHECKPOINT_DIR, fold)
             except FileNotFoundError:
-                print(f"[Fold {fold}] Aucun checkpoint trouvé; évaluation du test set annulée pour ce fold.")
-                log_file.close()
-                continue
+                print(f"[Fold {fold}] Aucun checkpoint trouvé; évaluation du test set avec le dernier modèle entraîné.")
 
             model.eval()
-            y_test_true, y_test_pred = [], []
+            y_test_true, y_test_pred, y_test_probs = [], [], []
 
             test_loader = DataLoader(test_dataset, batch_size=BATCH_SIZE)
             with torch.no_grad():
                 for batch_X, batch_y in test_loader:
                     batch_X, batch_y = batch_X.view(batch_X.size(0), -1).to(DEVICE), batch_y.to(DEVICE)
-                    preds = model(batch_X).squeeze()
-                    preds = (preds >= 0.5).float()
+                    outputs = model(batch_X).squeeze()
+                    preds = (outputs >= 0.5).float()
                     y_test_true.extend(batch_y.tolist())
                     y_test_pred.extend(preds.cpu().tolist())
+                    y_test_probs.extend(outputs.cpu().tolist())
 
             acc, f1, precision, recall = log_metrics(y_test_true, y_test_pred)
-            print(f"[Fold {fold}] Test Accuracy: {acc:.4f} | F1: {f1:.4f} | Precision: {precision:.4f} | Recall: {recall:.4f}")
-            write_log(log_file,
-                      f"\n[Fold {fold}] Test Accuracy: {acc:.4f} | F1: {f1:.4f} | Precision: {precision:.4f} | Recall: {recall:.4f}")
+            try:
+                auc = roc_auc_score(y_test_true, y_test_probs)
+            except ValueError:
+                auc = float('nan')
+            balanced_acc = balanced_accuracy_score(y_test_true, y_test_pred)
+
+            print(f"[Fold {fold}] Test Accuracy: {acc:.4f} | F1: {f1:.4f} | Precision: {precision:.4f} | Recall: {recall:.4f} | AUC: {auc:.4f} | Balanced Acc: {balanced_acc:.4f}")
+            write_log(log_file, f"\n[Fold {fold}] Test Accuracy: {acc:.4f} | F1: {f1:.4f} | Precision: {precision:.4f} | Recall: {recall:.4f} | AUC: {auc:.4f} | Balanced Acc: {balanced_acc:.4f}")
 
             wandb.log({
                 f"test/f1": f1,
                 f"test/accuracy": acc,
                 f"test/precision": precision,
                 f"test/recall": recall,
+                f"test/auc": auc,
+                f"test/balanced_accuracy": balanced_acc,
             })
 
             log_file.close()
 
     print("Training and evaluation complete.")
     wandb.finish()
-
 
 if __name__ == "__main__":
     import yaml

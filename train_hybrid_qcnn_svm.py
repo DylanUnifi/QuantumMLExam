@@ -1,3 +1,6 @@
+# train_hybrid_qcnn_svm.py
+# Version: 1.3 – Ajout balanced accuracy, AUC, logs complets comme train_classical/quantum
+
 import os
 import numpy as np
 import torch
@@ -5,6 +8,7 @@ import torch.nn as nn
 import torch.optim as optim
 from sklearn.preprocessing import StandardScaler
 from sklearn.svm import SVC
+from sklearn.metrics import balanced_accuracy_score, roc_auc_score
 from torch.utils.data import DataLoader, Subset
 from sklearn.model_selection import KFold
 from tqdm import tqdm
@@ -26,7 +30,7 @@ def train_feature_extractor(model, classifier, train_loader, optimizer, criterio
         batch_X, batch_y = batch_X.view(batch_X.size(0), -1).to(DEVICE), batch_y.to(DEVICE)
         optimizer.zero_grad()
         feats = model(batch_X)
-        outputs = classifier(feats).squeeze()  # Pas de sigmoïde ici !
+        outputs = classifier(feats).squeeze()
         loss = criterion(outputs, batch_y.float())
         loss.backward()
         optimizer.step()
@@ -39,7 +43,7 @@ def extract_features(model, loader):
     with torch.no_grad():
         for batch_X, batch_y in tqdm(loader, desc="Extracting features"):
             batch_X = batch_X.view(batch_X.size(0), -1).to(DEVICE)
-            feats = model(batch_X).cpu().numpy()  # Features directement depuis le feature extractor
+            feats = model(batch_X).cpu().numpy()
             features.append(feats)
             labels.append(batch_y.cpu().numpy())
     X = np.vstack(features)
@@ -47,7 +51,10 @@ def extract_features(model, loader):
     return X, y
 
 def run_train_hybrid_qcnn_svm(config):
-    EXPERIMENT_NAME = config.get("experiment_name", "hybrid_qcnn_svm_advanced_exp")
+    dataset_name = config["dataset"]["name"]
+    base_exp_name = config.get("experiment_name", "default_exp")
+    EXPERIMENT_NAME = f"{dataset_name}_{base_exp_name}"
+
     SAVE_DIR = os.path.join("engine/checkpoints", "hybrid_qcnn_svm", EXPERIMENT_NAME)
     os.makedirs(SAVE_DIR, exist_ok=True)
 
@@ -90,7 +97,7 @@ def run_train_hybrid_qcnn_svm(config):
         params = list(feature_extractor.parameters()) + list(classifier.parameters())
         optimizer = optim.Adam(params, lr=config["training"]["learning_rate"])
         scheduler = get_scheduler(optimizer, config.get("scheduler", None))
-        criterion = nn.BCEWithLogitsLoss()  # ✅ Utilisation de BCEWithLogitsLoss
+        criterion = nn.BCEWithLogitsLoss()
 
         best_f1, best_epoch = 0, 0
 
@@ -100,23 +107,34 @@ def run_train_hybrid_qcnn_svm(config):
 
             scaler = StandardScaler()
             X_val_scaled = scaler.fit_transform(X_val)
-            svm = SVC(C=1.0, kernel='rbf')
+            svm = SVC(C=1.0, kernel='rbf', probability=True)
             svm.fit(X_val_scaled, y_val)
             y_pred = svm.predict(X_val_scaled)
+            y_probs = svm.predict_proba(X_val_scaled)[:, 1]
 
             acc, f1, precision, recall = log_metrics(y_val, y_pred)
+            try:
+                auc = roc_auc_score(y_val, y_probs)
+            except ValueError:
+                auc = 0.0
+            bal_acc = balanced_accuracy_score(y_val, y_pred)
 
             wandb.log({
-                "vak/loss": val_loss,
+                "val/loss": val_loss,
                 "val/f1": f1,
                 "val/accuracy": acc,
                 "val/precision": precision,
                 "val/recall": recall,
+                "val/balanced_accuracy": bal_acc,
+                "val/auc": auc,
             })
 
-            write_log(log_file,
-                      f"[Epoch {epoch}] Loss: {val_loss:.4f} | F1: {f1:.4f} | Acc: {acc:.4f} | Prec: {precision:.4f} | Rec: {recall:.4f}")
-            print(f"[Fold {fold}][Epoch {epoch}] Loss: {val_loss:.4f} | F1: {f1:.4f}")
+            write_log(
+                log_file,
+                f"[Epoch {epoch}] Loss: {val_loss:.4f} | F1: {f1:.4f} | Acc: {acc:.4f} | "
+                f"BalAcc: {bal_acc:.4f} | AUC: {auc:.4f} | Prec: {precision:.4f} | Rec: {recall:.4f}"
+            )
+            print(f"[Fold {fold}][Epoch {epoch}] Loss: {val_loss:.4f} | F1: {f1:.4f} | BalAcc: {bal_acc:.4f} | AUC: {auc:.4f}")
 
             if f1 > best_f1:
                 best_f1, best_epoch = f1, epoch
@@ -140,7 +158,6 @@ def run_train_hybrid_qcnn_svm(config):
         write_log(log_file, f"\n[Fold {fold}] Best F1: {best_f1:.4f} at epoch {best_epoch}")
         log_file.close()
 
-        # Évaluation finale sur test set
         if test_dataset is not None:
             print("\n🔎 Loading best feature extractor and evaluating on test set...")
             trainval_loader = DataLoader(train_dataset, batch_size=config["training"]["batch_size"])
@@ -153,111 +170,36 @@ def run_train_hybrid_qcnn_svm(config):
             X_trainval_scaled = scaler.fit_transform(X_trainval)
             X_test_scaled = scaler.transform(X_test)
 
-            best_svm = SVC(C=1.0, kernel='rbf')
+            best_svm = SVC(C=1.0, kernel='rbf', probability=True)
             best_svm.fit(X_trainval_scaled, y_trainval)
             y_test_pred = best_svm.predict(X_test_scaled)
+            y_test_probs = best_svm.predict_proba(X_test_scaled)[:, 1]
 
             acc, f1, precision, recall = log_metrics(y_test, y_test_pred)
-            print(f"[Test Set] Accuracy: {acc:.4f} | F1: {f1:.4f} | Precision: {precision:.4f} | Recall: {recall:.4f}")
+            try:
+                auc = roc_auc_score(y_test, y_test_probs)
+            except ValueError:
+                auc = 0.0
+            bal_acc = balanced_accuracy_score(y_test, y_test_pred)
 
-            # 🔹 Rouvre un log global pour consigner l'évaluation du test set
+            print(f"[Test Set] Accuracy: {acc:.4f} | F1: {f1:.4f} | BalAcc: {bal_acc:.4f} | AUC: {auc:.4f} | Prec: {precision:.4f} | Rec: {recall:.4f}")
+
             global_log_path = os.path.join(SAVE_DIR, "logs", "test_evaluation.log")
             with open(global_log_path, "a") as log_file:
                 write_log(log_file,
-                          f"\n[Test Set] Accuracy: {acc:.4f} | F1: {f1:.4f} | Precision: {precision:.4f} | Recall: {recall:.4f}")
+                          f"\n[Test Set] Accuracy: {acc:.4f} | F1: {f1:.4f} | BalancedAcc: {bal_acc:.4f} | "
+                          f"AUC: {auc:.4f} | Precision: {precision:.4f} | Recall: {recall:.4f}")
 
             wandb.log({
-                f"test/svm_f1": f1,
-                f"test/svm_accuracy": acc,
-                f"test/svm_precision": precision,
-                f"test/svm_recall": recall,
+                "test/svm_f1": f1,
+                "test/svm_accuracy": acc,
+                "test/svm_precision": precision,
+                "test/svm_recall": recall,
+                "test/svm_balanced_accuracy": bal_acc,
+                "test/svm_auc": auc,
             })
 
-            # 🔹 Sauvegarde le modèle SVM et le scaler sur le train complet
-            final_checkpoint = {
-                "feature_extractor_state_dict": feature_extractor.state_dict(),
-                "scaler": scaler,
-                "svm": best_svm
-            }
-            final_model_path = os.path.join(SAVE_DIR, "hybrid_qcnn_svm_final.pt")
-            torch.save(final_checkpoint, final_model_path)
-            print(f"✅ Final checkpoint saved at {final_model_path}")
-
-            import pennylane as qml
-            from sklearn.metrics import accuracy_score, f1_score, precision_score, recall_score
-
-            # Nombre de qubits et device (tu peux changer "lightning.qubit" dans ton YAML)
-            n_qubits = config["quantum"]["n_qubits"]
-            dev = qml.device(config["quantum"]["backend"], wires=n_qubits)
-
-            # QNode pour définir le quantum kernel
-            @qml.qnode(dev)
-            def kernel_qnode(x1, x2):
-                # Encoding de x1
-                for i in range(n_qubits):
-                    qml.Hadamard(wires=i)
-                    qml.RZ(x1[i], wires=i)
-                # Encoding inverse de x2
-                for i in range(n_qubits):
-                    qml.RZ(-x2[i], wires=i)
-                    qml.Hadamard(wires=i)
-                return qml.probs(wires=range(n_qubits))
-
-            # Fonction pour calculer le kernel quantique entre deux vecteurs
-            def quantum_kernel(x1, x2):
-                return kernel_qnode(x1, x2)[0]  # Prend la première probabilité
-
-            # Fonction pour générer la matrice de kernel
-            def compute_quantum_kernel_matrix(X1, X2):
-                n1, n2 = len(X1), len(X2)
-                K = np.zeros((n1, n2))
-                for i in tqdm(range(n1), desc="Computing Quantum Kernel Matrix"):
-                    for j in range(n2):
-                        K[i, j] = quantum_kernel(X1[i], X2[j])
-                return K
-
-            # Limiter le nombre d'exemples pour le calcul du kernel QSVM
-            max_kernel_samples = 100  # 👈 adapte si besoin
-
-            n_samples = min(max_kernel_samples, len(X_trainval))
-            indices_train = np.random.choice(len(X_trainval), n_samples, replace=False)
-            indices_test = np.random.choice(len(X_test), n_samples, replace=False)
-
-            X_trainval_q = X_trainval[indices_train]
-            y_trainval_q = y_trainval[indices_train]
-            X_test_q = X_test[indices_test]
-            y_test_q = y_test[indices_test]
-
-            print(f"\n🔎 Subsampled to {n_samples} examples for QSVM kernel computation.")
-            print(f"🔎 Using {len(X_trainval_q)} train examples and {len(X_test_q)} test examples for QSVM kernel.")
-
-            print("\n🔎 QSVM: Calculating quantum kernel matrices...")
-            K_train = compute_quantum_kernel_matrix(X_trainval_q, X_trainval_q)
-            K_test = compute_quantum_kernel_matrix(X_test_q, X_trainval_q)
-
-            print("\n🔎 QSVM: Training final QSVM...")
-            qsvm = SVC(kernel="precomputed")
-            qsvm.fit(K_train, y_trainval_q)
-
-            print("\n🔎 QSVM: Evaluating on test set...")
-            y_test_pred = qsvm.predict(K_test)
-
-            acc = accuracy_score(y_test_q, y_test_pred)
-            f1 = f1_score(y_test_q, y_test_pred, average="binary")
-            precision = precision_score(y_test_q, y_test_pred, average="binary")
-            recall = recall_score(y_test_q, y_test_pred, average="binary")
-
-            print(f"[QSVM Test Set] Accuracy: {acc:.4f} | F1: {f1:.4f} | Precision: {precision:.4f} | Recall: {recall:.4f}")
-
-            # 🔹 Logs dans wandb pour comparaison directe avec Hybrid QCNN + SVM
-            wandb.log({
-                "test/qsvm_accuracy": acc,
-                "test/qsvm_f1": f1,
-                "test/qsvm_precision": precision,
-                "test/qsvm_recall": recall
-            })
     wandb.finish()
-
     print("Hybrid QCNN + SVM training complete.")
 
 
