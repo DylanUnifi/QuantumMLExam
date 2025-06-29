@@ -28,7 +28,9 @@ def objective(trial, X_train, y_train, X_val, y_val, log_file):
     model.fit(X_train, y_train)
     metrics = model.evaluate(X_val, y_val)
     write_log(log_file, f"Trial: {trial.number} | Params: {trial.params} | F1: {metrics['f1']:.4f}")
+
     return 1.0 - metrics['f1']
+
 
 
 def run_train_svm(config):
@@ -37,8 +39,11 @@ def run_train_svm(config):
     LOG_DIR = os.path.join(SAVE_DIR, "logs")
     os.makedirs(SAVE_DIR, exist_ok=True)
 
-    wandb.init(project="qml_project", name=EXPERIMENT_NAME, config=config)
-    wandb.config.update(config)
+    wandb.init(
+        project="qml_project",
+        name=EXPERIMENT_NAME,
+        config=config
+    )
 
     os.makedirs(LOG_DIR, exist_ok=True)
 
@@ -57,7 +62,7 @@ def run_train_svm(config):
         binary_classes=binary_classes
     )
 
-    indices = torch.randperm(len(train_dataset))[:2000]
+    indices = torch.randperm(len(train_dataset))[:3000]
     train_dataset = Subset(train_dataset, indices)
 
     print(f"Nombre d'exemples chargés dans train_dataset : {len(train_dataset)}")
@@ -92,6 +97,12 @@ def run_train_svm(config):
 
     metrics = final_model.evaluate(X_val_pca, y_val)
     write_log(log_file, f"Final Evaluation Metrics on Validation: {metrics}\n")
+    wandb.log({
+        "val/f1": metrics["f1"],
+        "val/accuracy": metrics["accuracy"],
+        "val/precision": metrics["precision"],
+        "val/recall": metrics["recall"]
+    })
 
     y_pred_val = final_model.predict(X_val_pca)
     cm = confusion_matrix(y_val, y_pred_val)
@@ -99,6 +110,7 @@ def run_train_svm(config):
     disp.plot()
     plt.savefig(os.path.join(SAVE_DIR, "confusion_matrix_val.png"))
     plt.close()
+    wandb.log({"confusion_matrix_val": wandb.Image(os.path.join(SAVE_DIR, "confusion_matrix_val.png"))})
 
     if test_dataset is not None:
         test_loader = torch.utils.data.DataLoader(test_dataset, batch_size=len(test_dataset))
@@ -109,23 +121,33 @@ def run_train_svm(config):
             X_test = pca.transform(X_test)
 
         y_pred_test = final_model.predict(X_test)
-        test_metrics = log_metrics(y_test, y_pred_test)
-        write_log(log_file, f"\nTest Metrics: {test_metrics}")
+        acc, f1, precision, recall = log_metrics(y_test, y_pred_test)
+        write_log(log_file,
+                  f"\nTest Metrics: acc={acc:.4f}, f1={f1:.4f}, precision={precision:.4f}, recall={recall:.4f}")
 
         cm_test = confusion_matrix(y_test, y_pred_test)
         disp_test = ConfusionMatrixDisplay(confusion_matrix=cm_test)
+        cm_test_path = os.path.join(SAVE_DIR, "confusion_matrix_test.png")
         disp_test.plot()
-        plt.savefig(os.path.join(SAVE_DIR, "confusion_matrix_test.png"))
+        plt.savefig(cm_test_path)
         plt.close()
+
+        wandb.log({
+            f"test/f1": f1,
+            f"test/accuracy": acc,
+            f"test/precision": precision,
+            f"test/recall": recall,
+        })
 
     joblib.dump(study, os.path.join(SAVE_DIR, "optuna_study.pkl"))
     log_file.close()
     print("SVM training complete.")
+    wandb.finish()
 
 
 
 if __name__ == "__main__":
     import yaml
-    with open("configs/config_train_svm_svhn.yaml", "r") as f:
+    with open("configs/config_train_svm_fashion.yaml", "r") as f:
         config = yaml.safe_load(f)
     run_train_svm(config)

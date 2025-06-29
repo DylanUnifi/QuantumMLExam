@@ -5,11 +5,12 @@ dataset:
   binary_classes: [3, 8]  # Pull-over vs Sandal par ex. (classes 3 et 8)
 
 training:
-  batch_size: 256
+  batch_size: 64
   epochs: 20
   learning_rate: 0.001
   kfold: 3
-  early_stopping: 5
+  scheduler: "StepLR" # Options: step, cosine, none
+  early_stopping: 10                # Patience in epochs
 
 model:
   in_channels: 1  # Fashion-MNIST est en niveaux de gris comme MNIST
@@ -20,4 +21,3 @@ checkpoint:
   save_dir: "checkpoints"
   subdir: "cnn_fashionmnist_experiment"
 
-scheduler: "step"

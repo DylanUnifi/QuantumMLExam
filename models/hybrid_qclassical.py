@@ -1,23 +1,47 @@
-# models/hybrid_qclassical.py
-# Version: 1.0 – Quantum Residual MLP Inspired
-
 import torch
 import torch.nn as nn
+import torch.nn.functional as F
 import pennylane as qml
 import numpy as np
 
+class ResidualMLPBlock(nn.Module):
+    def __init__(self, in_features, out_features, downsample=False, dropout=0.3):
+        super().__init__()
+        self.downsample = None
+        self.fc1 = nn.Linear(in_features, out_features)
+        self.ln1 = nn.LayerNorm(out_features)
+        self.fc2 = nn.Linear(out_features, out_features)
+        self.ln2 = nn.LayerNorm(out_features)
+        self.dropout = nn.Dropout(dropout)
+
+        if downsample or in_features != out_features:
+            self.downsample = nn.Sequential(
+                nn.Linear(in_features, out_features),
+                nn.LayerNorm(out_features)
+            )
+
+    def forward(self, x):
+        identity = x if self.downsample is None else self.downsample(x)
+        out = F.relu(self.ln1(self.fc1(x)))
+        out = self.dropout(out)
+        out = self.ln2(self.fc2(out))
+        out += identity
+        return F.relu(out)
+
 class QuantumLayer(nn.Module):
-    def __init__(self, n_qubits, n_layers, input_dim):
+    def __init__(self, n_qubits, n_layers):
         super().__init__()
         self.n_qubits = n_qubits
         self.n_layers = n_layers
-        self.input_dim = input_dim
 
-        self.dev = qml.device("default.qubit", wires=n_qubits)
+        self.dev = qml.device("lightning.qubit", wires=n_qubits, shots=None)  # backend différentiable
 
         @qml.qnode(self.dev, interface="torch")
         def circuit(inputs, weights):
-            qml.templates.AngleEmbedding(inputs, wires=range(n_qubits), rotation='Y')
+            inputs = inputs.flatten()
+            for i in range(n_qubits):
+                qml.RY(inputs[i], wires=i)
+                qml.RZ(inputs[i], wires=i)
             qml.templates.BasicEntanglerLayers(weights, wires=range(n_qubits))
             return [qml.expval(qml.PauliZ(i)) for i in range(n_qubits)]
 
@@ -25,30 +49,42 @@ class QuantumLayer(nn.Module):
         weight_shapes = {"weights": (n_layers, n_qubits)}
         self.qnn = qml.qnn.TorchLayer(self.circuit, weight_shapes)
 
+        # initialisation aléatoire des poids quantiques
+        for name, param in self.qnn.named_parameters():
+            if "weights" in name:
+                nn.init.normal_(param, mean=0.0, std=0.01)
+
     def forward(self, x):
-        # suppose x est de dimension [batch_size, input_dim]
         if x.dim() == 1:
             x = x.unsqueeze(0)
-        x = x[:, :self.n_qubits] * np.pi  # mapping inputs
-        return self.qnn(x)
+        x = torch.tanh(x[:, :self.n_qubits]) * np.pi
+
+        # ⚠️ Correction : traiter chaque sample indépendamment
+        outputs = []
+        for sample in x:
+            q_out = self.qnn(sample.unsqueeze(0))  # shape [1, n_qubits]
+            outputs.append(q_out)
+        return torch.cat(outputs, dim=0)  # shape [batch_size, n_qubits]
 
 class QuantumResidualMLP(nn.Module):
-    def __init__(self, input_size, hidden_sizes=[8, 4], n_layers=2):
+    def __init__(self, input_size, hidden_sizes=None, n_qubits=4, n_layers=2, dropout=0.3):
         super().__init__()
-        self.fc_in = nn.Linear(input_size, hidden_sizes[0])
-        self.bn_in = nn.BatchNorm1d(hidden_sizes[0])
-        self.quantum1 = QuantumLayer(n_qubits=hidden_sizes[0], n_layers=n_layers, input_dim=input_size)
+        if hidden_sizes is None:
+            hidden_sizes = [128, 64, 32]
 
-        self.fc_mid = nn.Linear(hidden_sizes[0], hidden_sizes[1])
-        self.bn_mid = nn.BatchNorm1d(hidden_sizes[1])
-        self.quantum2 = QuantumLayer(n_qubits=hidden_sizes[1], n_layers=n_layers, input_dim=hidden_sizes[0])
-
-        self.fc_out = nn.Linear(hidden_sizes[1], 1)
+        self.block1 = ResidualMLPBlock(input_size, hidden_sizes[0], downsample=True, dropout=dropout)
+        self.block2 = ResidualMLPBlock(hidden_sizes[0], hidden_sizes[1], downsample=True, dropout=dropout)
+        self.block3 = ResidualMLPBlock(hidden_sizes[1], hidden_sizes[2], downsample=True, dropout=dropout)
+        self.dropout = nn.Dropout(dropout)
+        self.quantum = QuantumLayer(n_qubits=n_qubits, n_layers=n_layers)
+        self.bn_q = nn.LayerNorm(n_qubits)  # stabilisation de la sortie quantique
+        self.fc = nn.Linear(n_qubits, 1)
 
     def forward(self, x):
-        x = torch.relu(self.bn_in(self.fc_in(x)))
-        x = self.quantum1(x)
-        x = torch.relu(self.bn_mid(self.fc_mid(x)))
-        x = self.quantum2(x)
-        x = self.fc_out(x)
-        return torch.sigmoid(x)
+        x = self.block1(x)
+        x = self.block2(x)
+        x = self.block3(x)
+        x = self.dropout(x)
+        x = self.quantum(x)
+        x = self.bn_q(x)
+        return torch.sigmoid(self.fc(x))

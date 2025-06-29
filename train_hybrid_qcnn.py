@@ -23,19 +23,11 @@ def run_train_hybrid_qcnn(config):
     CHECKPOINT_DIR = os.path.join(SAVE_DIR, "folds")
     os.makedirs(CHECKPOINT_DIR, exist_ok=True)
 
-    wandb.init(project="qml_project", name=EXPERIMENT_NAME, config=config)
-    wandb.config.update({
-        "dataset_name": config["dataset"]["name"],
-        "binary_classes": config["dataset"].get("binary_classes", [3,8]),
-        "n_qubits": config["quantum"]["n_qubits"],
-        "quantum_backend": config["quantum"]["backend"],
-        "learning_rate": config["training"]["learning_rate"],
-        "epochs": config["training"]["epochs"],
-        "batch_size": config["training"]["batch_size"],
-        "scheduler": config.get("scheduler", None),
-        "kfold": config["training"]["kfold"],
-        "early_stopping": config["training"]["early_stopping"],
-    })
+    wandb.init(
+        project="qml_project",
+        name=EXPERIMENT_NAME,
+        config=config
+    )
 
     DEVICE = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     BATCH_SIZE = config["training"]["batch_size"]
@@ -51,7 +43,7 @@ def run_train_hybrid_qcnn(config):
         binary_classes=config.get("binary_classes", [3, 8])
     )
 
-    indices = torch.randperm(len(train_dataset))[:2000]
+    indices = torch.randperm(len(train_dataset))[:500]
     train_dataset = Subset(train_dataset, indices)
 
     print(f"Nombre d'exemples chargés dans train_dataset : {len(train_dataset)}")
@@ -118,13 +110,11 @@ def run_train_hybrid_qcnn(config):
             duration = time.time() - start_time
 
             wandb.log({
-                "train/loss": val_loss,
+                "val/loss": val_loss,
                 "val/f1": f1,
                 "val/accuracy": acc,
                 "val/precision": precision,
                 "val/recall": recall,
-                "epoch": epoch,
-                "fold": fold,
             })
 
             write_log(log_file,
@@ -189,11 +179,10 @@ def run_train_hybrid_qcnn(config):
             write_log(log_file,
                       f"\n[Fold {fold}] Test Accuracy: {acc:.4f} | F1: {f1:.4f} | Precision: {precision:.4f} | Recall: {recall:.4f}")
             wandb.log({
-                "test/accuracy": acc,
-                "test/f1": f1,
-                "test/precision": precision,
-                "test/recall": recall,
-                "fold": fold,
+                f"test/f1": f1,
+                f"test/accuracy": acc,
+                f"test/precision": precision,
+                f"test/recall": recall,
             })
 
             # Global log for final results
@@ -205,6 +194,7 @@ def run_train_hybrid_qcnn(config):
         log_file.close()
 
     print("Hybrid QCNN training and evaluation complete.")
+    wandb.finish()
 
 
 if __name__ == "__main__":
@@ -212,4 +202,3 @@ if __name__ == "__main__":
     with open("configs/config_train_qcnn_cifar10.yaml", "r") as f:
         config = yaml.safe_load(f)
     run_train_hybrid_qcnn(config)
-    wandb.finish()

@@ -5,16 +5,15 @@ dataset:
   binary_classes: [3, 8]
 
 training:
-  batch_size: 256
-  epochs: 10
+  batch_size: 64
+  epochs: 40
   learning_rate: 0.001
   kfold: 3
-  early_stopping: 5
-
-scheduler: "StepLR"
-scheduler_params:
-  step_size: 10
-  gamma: 0.5
+  early_stopping: 15
+  scheduler: "StepLR"
+  scheduler_params:
+    step_size: 10
+    gamma: 0.5
 
 model:
   in_channels: 3  # CIFAR-10 images sont RGB, donc 3 canaux ; mets 1 pour MNIST/Fashion-MNIST

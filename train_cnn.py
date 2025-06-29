@@ -27,8 +27,11 @@ def run_train_cnn(config):
     CHECKPOINT_DIR = os.path.join(SAVE_DIR, "folds")
     os.makedirs(CHECKPOINT_DIR, exist_ok=True)
 
-    wandb.init(project="qml_project", name=EXPERIMENT_NAME, config=config)
-    wandb.config.update(config)
+    wandb.init(
+        project="qml_project",
+        name=EXPERIMENT_NAME,
+        config=config
+    )
 
     DEVICE = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     BATCH_SIZE = config["training"]["batch_size"]
@@ -45,6 +48,10 @@ def run_train_cnn(config):
         binary_classes=config.get("binary_classes", [3, 8]),
         grayscale=config["dataset"].get("grayscale", None)  # 🔥 récupère du yaml
     )
+
+    indices = torch.randperm(len(train_dataset))[:3000]
+    train_dataset = Subset(train_dataset, indices)
+
     print(f"Nombre d'exemples chargés dans train_dataset : {len(train_dataset)}")
 
     kfold = KFold(n_splits=KFOLD, shuffle=True, random_state=42)
@@ -113,13 +120,11 @@ def run_train_cnn(config):
             writer.add_scalar("Recall/val", recall, epoch)
 
             wandb.log({
-                "train/loss": val_loss,
+                "val/loss": val_loss,
                 "val/f1": f1,
                 "val/accuracy": acc,
                 "val/precision": precision,
                 "val/recall": recall,
-                "epoch": epoch,
-                "fold": fold,
             })
 
             write_log(log_file,
@@ -163,7 +168,12 @@ def run_train_cnn(config):
         # Évaluation finale sur test set
         if test_dataset is not None:
             print(f"[Fold {fold}] Loading best model and evaluating on test set...")
-            model, _, _ = safe_load_checkpoint(model, optimizer, CHECKPOINT_DIR, fold)
+            try:
+                model, _, _ = safe_load_checkpoint(model, optimizer, CHECKPOINT_DIR, fold)
+            except FileNotFoundError:
+                print(f"[Fold {fold}] Aucun checkpoint trouvé; évaluation du test set annulée pour ce fold.")
+                log_file.close()
+                continue
             model.eval()
             y_test_true, y_test_pred = [], []
 
@@ -183,29 +193,23 @@ def run_train_cnn(config):
                       f"\n[Fold {fold}] Test Accuracy: {acc:.4f} | F1: {f1:.4f} | Precision: {precision:.4f} | Recall: {recall:.4f}")
 
             wandb.log({
-                "test/f1": f1,
-                "test/accuracy": acc,
-                "test/precision": precision,
-                "test/recall": recall,
-                "fold": fold,
-                "fold/best_f1": best_f1,
-                "fold/best_epoch": best_epoch
+                f"test/f1": f1,
+                f"test/accuracy": acc,
+                f"test/precision": precision,
+                f"test/recall": recall,
             })
-            wandb.run.summary[f"fold_{fold}/test_f1"] = f1
-            wandb.run.summary[f"fold_{fold}/test_accuracy"] = acc
-            wandb.run.summary[f"fold_{fold}/test_precision"] = precision
-            wandb.run.summary[f"fold_{fold}/test_recall"] = recall
 
             log_file.close()
 
     print("CNN Training and evaluation complete.")
+    wandb.finish()
 
 
 if __name__ == "__main__":
     import yaml
 
     try:
-        with open("configs/config_train_cnn_svhn.yaml", "r") as f:
+        with open("configs/config_train_cnn_fashion.yaml", "r") as f:
             config = yaml.safe_load(f)
         run_train_cnn(config)
     finally:

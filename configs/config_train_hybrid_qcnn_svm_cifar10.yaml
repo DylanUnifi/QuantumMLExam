@@ -5,16 +5,15 @@ dataset:
   binary_classes: [3, 8]
 
 training:
-  batch_size: 512
-  epochs: 10
+  batch_size: 32
+  epochs: 100
   learning_rate: 0.0005
   kfold: 3
   early_stopping: 5
-
-scheduler: "StepLR"
-scheduler_params:
-  step_size: 10
-  gamma: 0.5
+  scheduler: "StepLR"
+  scheduler_params:
+    step_size: 5
+    gamma: 0.5
 
 svm:
   optimize: true

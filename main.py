@@ -14,6 +14,7 @@ from train_classical import run_train_classical
 from train_cnn import run_train_cnn
 from train_hybrid_qcnn import run_train_hybrid_qcnn
 from train_svm import run_train_svm
+from train_quantum_mlp import run_train_quantum_mlp
 
 
 def set_seed(seed):
@@ -55,25 +56,30 @@ def main():
         project=args.project,
         name=f"{args.model}_{wandb.util.generate_id()}",
         config=config,
-        notes=f"Model: {args.model}, Optimize: {args.optimize}"
+        tags=[config["dataset"]["name"], args.model]
     )
-    wandb.config.update({"model": args.model, "optimize": args.optimize}, allow_val_change=True)
 
     # ➤ Lancement du bon script en fonction du modèle choisi
     if args.model == "classical":
         run_train_classical(config)
+        wandb.finish()
     elif args.model == "cnn":
         run_train_cnn(config)
+        wandb.finish()
     elif args.model == "hybrid_qcnn":
-        run_train_cnn(config)
-    elif args.model == "quantum_mlp":
         run_train_hybrid_qcnn(config)
+        wandb.finish()
+    elif args.model == "quantum_mlp":
+        run_train_quantum_mlp(config)
+        wandb.finish()
     elif args.model == "hybrid_qcnn_svm":
         run_train_hybrid_qcnn_svm(config)
+        wandb.finish()
     elif args.model == "svm":
         config.setdefault("svm", {})
         config["svm"]["optimize"] = args.optimize
         run_train_svm(config)
+        wandb.finish()
     else:
         raise ValueError(f"Unsupported model: {args.model}")
 

@@ -23,8 +23,11 @@ from tqdm import tqdm, trange
 def run_train_quantum_mlp(config):
     EXPERIMENT_NAME = config.get("experiment_name", "quantum_mlp_exp")
 
-    wandb.init(project="qml_project", name=EXPERIMENT_NAME, config=config)
-    wandb.config.update(config)
+    wandb.init(
+        project="qml_project",
+        name=EXPERIMENT_NAME,
+        config=config
+    )
 
     SAVE_DIR = os.path.join("engine/checkpoints", "quantum_mlp", EXPERIMENT_NAME)
     CHECKPOINT_DIR = os.path.join(SAVE_DIR, "folds")
@@ -45,7 +48,7 @@ def run_train_quantum_mlp(config):
         binary_classes=config.get("binary_classes", [0, 1])
     )
 
-    indices = torch.randperm(len(train_dataset))[:2000]
+    indices = torch.randperm(len(train_dataset))[:500]
     train_dataset = Subset(train_dataset, indices)
 
     print(f"Nombre d'exemples chargés dans train_dataset : {len(train_dataset)}")
@@ -64,8 +67,8 @@ def run_train_quantum_mlp(config):
         train_subset = torch.utils.data.Subset(train_dataset, train_idx)
         val_subset = torch.utils.data.Subset(train_dataset, val_idx)
 
-        train_loader = DataLoader(train_subset, batch_size=BATCH_SIZE, shuffle=True)
-        val_loader = DataLoader(val_subset, batch_size=BATCH_SIZE)
+        train_loader = DataLoader(train_subset, batch_size=BATCH_SIZE, shuffle=True, drop_last=True)
+        val_loader = DataLoader(val_subset, batch_size=BATCH_SIZE, drop_last=False)
 
         # Exemple pour input_size
         sample_X, _ = train_dataset[0]
@@ -126,13 +129,11 @@ def run_train_quantum_mlp(config):
 
             # 📊 Log des métriques à wandb
             wandb.log({
-                "train/loss": val_loss,
+                "val/loss": val_loss,
                 "val/f1": f1,
                 "val/accuracy": acc,
                 "val/precision": precision,
                 "val/recall": recall,
-                "epoch": epoch,
-                "fold": fold,
             })
 
             print(f"[Fold {fold}][Epoch {epoch}] Loss: {val_loss:.4f} | F1: {f1:.4f}")
@@ -174,7 +175,7 @@ def run_train_quantum_mlp(config):
             model.eval()
             y_test_true, y_test_pred = [], []
 
-            test_loader = DataLoader(test_dataset, batch_size=BATCH_SIZE)  # AJOUT
+            test_loader = DataLoader(test_dataset, batch_size=BATCH_SIZE, drop_last=False)  # AJOUT
 
             with torch.no_grad():
                 for batch_X, batch_y in test_loader:
@@ -191,16 +192,16 @@ def run_train_quantum_mlp(config):
                       f"\n[Fold {fold}] Test Accuracy: {acc:.4f} | F1: {f1:.4f} | Precision: {precision:.4f} | Recall: {recall:.4f}")
 
             wandb.log({
-                "test/f1": f1,
-                "test/accuracy": acc,
-                "test/precision": precision,
-                "test/recall": recall,
-                "fold": fold
+                f"test/f1": f1,
+                f"test/accuracy": acc,
+                f"test/precision": precision,
+                f"test/recall": recall,
             })
 
             log_file.close()
 
     print("Quantum MLP training complete.")
+    wandb.finish()
 
 
 if __name__ == "__main__":

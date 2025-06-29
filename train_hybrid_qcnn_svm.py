@@ -51,8 +51,11 @@ def run_train_hybrid_qcnn_svm(config):
     SAVE_DIR = os.path.join("engine/checkpoints", "hybrid_qcnn_svm", EXPERIMENT_NAME)
     os.makedirs(SAVE_DIR, exist_ok=True)
 
-    wandb.init(project="qml_project", name=EXPERIMENT_NAME, config=config)
-    wandb.config.update(config)
+    wandb.init(
+        project="qml_project",
+        name=EXPERIMENT_NAME,
+        config=config
+    )
 
     train_dataset, test_dataset = load_dataset_by_name(
         name=config["dataset"]["name"],
@@ -60,7 +63,7 @@ def run_train_hybrid_qcnn_svm(config):
         binary_classes=config.get("binary_classes", [3, 8])
     )
 
-    indices = torch.randperm(len(train_dataset))[:2000]
+    indices = torch.randperm(len(train_dataset))[:500]
     train_dataset = Subset(train_dataset, indices)
 
     print(f"Nombre d'exemples chargés dans train_dataset : {len(train_dataset)}")
@@ -104,13 +107,11 @@ def run_train_hybrid_qcnn_svm(config):
             acc, f1, precision, recall = log_metrics(y_val, y_pred)
 
             wandb.log({
-                "train/loss": val_loss,
+                "vak/loss": val_loss,
                 "val/f1": f1,
                 "val/accuracy": acc,
                 "val/precision": precision,
                 "val/recall": recall,
-                "epoch": epoch,
-                "fold": fold,
             })
 
             write_log(log_file,
@@ -165,15 +166,11 @@ def run_train_hybrid_qcnn_svm(config):
                 write_log(log_file,
                           f"\n[Test Set] Accuracy: {acc:.4f} | F1: {f1:.4f} | Precision: {precision:.4f} | Recall: {recall:.4f}")
 
-            # 🔹 Log des métriques finales dans wandb
             wandb.log({
-                "test/accuracy": acc,
-                "test/f1": f1,
-                "test/precision": precision,
-                "test/recall": recall,
-                "test/dataset": config["dataset"]["name"],  # 🔥 consigner le dataset
-                "test/encoding": config["dataset"].get("encoding", "angle"),
-                "test/quantum_backend": config["quantum"].get("backend", "default.qubit")
+                f"test/svm_f1": f1,
+                f"test/svm_accuracy": acc,
+                f"test/svm_precision": precision,
+                f"test/svm_recall": recall,
             })
 
             # 🔹 Sauvegarde le modèle SVM et le scaler sur le train complet
@@ -186,81 +183,82 @@ def run_train_hybrid_qcnn_svm(config):
             torch.save(final_checkpoint, final_model_path)
             print(f"✅ Final checkpoint saved at {final_model_path}")
 
+            import pennylane as qml
+            from sklearn.metrics import accuracy_score, f1_score, precision_score, recall_score
+
+            # Nombre de qubits et device (tu peux changer "lightning.qubit" dans ton YAML)
+            n_qubits = config["quantum"]["n_qubits"]
+            dev = qml.device(config["quantum"]["backend"], wires=n_qubits)
+
+            # QNode pour définir le quantum kernel
+            @qml.qnode(dev)
+            def kernel_qnode(x1, x2):
+                # Encoding de x1
+                for i in range(n_qubits):
+                    qml.Hadamard(wires=i)
+                    qml.RZ(x1[i], wires=i)
+                # Encoding inverse de x2
+                for i in range(n_qubits):
+                    qml.RZ(-x2[i], wires=i)
+                    qml.Hadamard(wires=i)
+                return qml.probs(wires=range(n_qubits))
+
+            # Fonction pour calculer le kernel quantique entre deux vecteurs
+            def quantum_kernel(x1, x2):
+                return kernel_qnode(x1, x2)[0]  # Prend la première probabilité
+
+            # Fonction pour générer la matrice de kernel
+            def compute_quantum_kernel_matrix(X1, X2):
+                n1, n2 = len(X1), len(X2)
+                K = np.zeros((n1, n2))
+                for i in tqdm(range(n1), desc="Computing Quantum Kernel Matrix"):
+                    for j in range(n2):
+                        K[i, j] = quantum_kernel(X1[i], X2[j])
+                return K
+
+            # Limiter le nombre d'exemples pour le calcul du kernel QSVM
+            max_kernel_samples = 100  # 👈 adapte si besoin
+
+            n_samples = min(max_kernel_samples, len(X_trainval))
+            indices_train = np.random.choice(len(X_trainval), n_samples, replace=False)
+            indices_test = np.random.choice(len(X_test), n_samples, replace=False)
+
+            X_trainval_q = X_trainval[indices_train]
+            y_trainval_q = y_trainval[indices_train]
+            X_test_q = X_test[indices_test]
+            y_test_q = y_test[indices_test]
+
+            print(f"\n🔎 Subsampled to {n_samples} examples for QSVM kernel computation.")
+            print(f"🔎 Using {len(X_trainval_q)} train examples and {len(X_test_q)} test examples for QSVM kernel.")
+
+            print("\n🔎 QSVM: Calculating quantum kernel matrices...")
+            K_train = compute_quantum_kernel_matrix(X_trainval_q, X_trainval_q)
+            K_test = compute_quantum_kernel_matrix(X_test_q, X_trainval_q)
+
+            print("\n🔎 QSVM: Training final QSVM...")
+            qsvm = SVC(kernel="precomputed")
+            qsvm.fit(K_train, y_trainval_q)
+
+            print("\n🔎 QSVM: Evaluating on test set...")
+            y_test_pred = qsvm.predict(K_test)
+
+            acc = accuracy_score(y_test_q, y_test_pred)
+            f1 = f1_score(y_test_q, y_test_pred, average="binary")
+            precision = precision_score(y_test_q, y_test_pred, average="binary")
+            recall = recall_score(y_test_q, y_test_pred, average="binary")
+
+            print(f"[QSVM Test Set] Accuracy: {acc:.4f} | F1: {f1:.4f} | Precision: {precision:.4f} | Recall: {recall:.4f}")
+
+            # 🔹 Logs dans wandb pour comparaison directe avec Hybrid QCNN + SVM
+            wandb.log({
+                "test/qsvm_accuracy": acc,
+                "test/qsvm_f1": f1,
+                "test/qsvm_precision": precision,
+                "test/qsvm_recall": recall
+            })
+    wandb.finish()
+
     print("Hybrid QCNN + SVM training complete.")
-
-    import pennylane as qml
-    from sklearn.metrics import accuracy_score, f1_score, precision_score, recall_score
-
-    # Nombre de qubits et device (tu peux changer "lightning.qubit" dans ton YAML)
-    n_qubits = config["quantum"]["n_qubits"]
-    dev = qml.device(config["quantum"]["backend"], wires=n_qubits)
-
-    # QNode pour définir le quantum kernel
-    @qml.qnode(dev)
-    def kernel_qnode(x1, x2):
-        # Encoding de x1
-        for i in range(n_qubits):
-            qml.Hadamard(wires=i)
-            qml.RZ(x1[i], wires=i)
-        # Encoding inverse de x2
-        for i in range(n_qubits):
-            qml.RZ(-x2[i], wires=i)
-            qml.Hadamard(wires=i)
-        return qml.probs(wires=range(n_qubits))
-
-    # Fonction pour calculer le kernel quantique entre deux vecteurs
-    def quantum_kernel(x1, x2):
-        return kernel_qnode(x1, x2)[0]  # Prend la première probabilité
-
-    # Fonction pour générer la matrice de kernel
-    def compute_quantum_kernel_matrix(X1, X2):
-        n1, n2 = len(X1), len(X2)
-        K = np.zeros((n1, n2))
-        for i in tqdm(range(n1), desc="Computing Quantum Kernel Matrix"):
-            for j in range(n2):
-                K[i, j] = quantum_kernel(X1[i], X2[j])
-        return K
-
-    # Limiter le nombre d'exemples pour le calcul du kernel QSVM
-    max_kernel_samples = 500  # 👈 adapte si besoin
-
-    n_samples = min(max_kernel_samples, len(X_trainval))
-    indices_train = np.random.choice(len(X_trainval), n_samples, replace=False)
-    indices_test = np.random.choice(len(X_test), n_samples, replace=False)
-
-    X_trainval_q = X_trainval[indices_train]
-    y_trainval_q = y_trainval[indices_train]
-    X_test_q = X_test[indices_test]
-    y_test_q = y_test[indices_test]
-
-    print(f"\n🔎 Subsampled to {n_samples} examples for QSVM kernel computation.")
-    print(f"🔎 Using {len(X_trainval_q)} train examples and {len(X_test_q)} test examples for QSVM kernel.")
-
-    print("\n🔎 QSVM: Calculating quantum kernel matrices...")
-    K_train = compute_quantum_kernel_matrix(X_trainval_q, X_trainval_q)
-    K_test = compute_quantum_kernel_matrix(X_test_q, X_trainval_q)
-
-    print("\n🔎 QSVM: Training final QSVM...")
-    qsvm = SVC(kernel="precomputed")
-    qsvm.fit(K_train, y_trainval_q)
-
-    print("\n🔎 QSVM: Evaluating on test set...")
-    y_test_pred = qsvm.predict(K_test)
-
-    acc = accuracy_score(y_test_q, y_test_pred)
-    f1 = f1_score(y_test_q, y_test_pred, average="binary")
-    precision = precision_score(y_test_q, y_test_pred, average="binary")
-    recall = recall_score(y_test_q, y_test_pred, average="binary")
-
-    print(f"[QSVM Test Set] Accuracy: {acc:.4f} | F1: {f1:.4f} | Precision: {precision:.4f} | Recall: {recall:.4f}")
-
-    # 🔹 Logs dans wandb pour comparaison directe avec Hybrid QCNN + SVM
-    wandb.log({
-        "qsvm/test_accuracy": acc,
-        "qsvm/test_f1": f1,
-        "qsvm/test_precision": precision,
-        "qsvm/test_recall": recall
-    })
 
 
 if __name__ == "__main__":

@@ -10,12 +10,12 @@ model:
   hidden_sizes: [128, 64, 32]
 
 training:
-  batch_size: 256
+  batch_size: 64
   epochs: 20
   learning_rate: 0.001
   kfold: 3
-  scheduler: "cosine"              # Options: step, cosine, none
-  early_stopping: 5                # Patience in epochs
+  scheduler: "StepLR" # Options: step, cosine, none
+  early_stopping: 10                # Patience in epochs
 
 checkpoint:
   save_dir: "checkpoints"

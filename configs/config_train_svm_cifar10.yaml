@@ -7,7 +7,6 @@ dataset:
 training:
   epochs: 1  # Dummy value, SVM ne s'entraîne pas par epochs mais ton loader attend peut-être cette clé
   batch_size: 256
-  kfold: 5
 
 svm:
   optimize: true
