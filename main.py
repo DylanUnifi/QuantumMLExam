@@ -6,7 +6,7 @@ import numpy as np
 import torch
 import random
 import sys
-import wandb  # 🎉
+import wandb
 from train_hybrid_qcnn_svm import run_train_hybrid_qcnn_svm
 
 from configs.config import load_config
@@ -29,7 +29,7 @@ def main():
     parser = argparse.ArgumentParser(description="Unified training script for classical, CNN, hybrid QCNN, Quantum MLP,"
                                                  "hybrid_qcnn_svm, SVM, and  models.")
     parser.add_argument("--model", type=str, required=True,
-                        help="Model name: classical, cnn, hybrid_qcnn, quantum_mlp, hybrid_qcnn_svm, svm")
+                        help="Model name: classical_mlp, cnn, svm, quantum_mlp, qcnn, svm_qkernel")
     parser.add_argument("--config", type=str, default="configs/config_train_quantum_mlp_fashion.yaml",
                         help="Path to configuration YAML file")
     parser.add_argument("--optimize", action="store_true",
@@ -38,7 +38,7 @@ def main():
                         help="Weights & Biases project name")
 
     args = parser.parse_args()
-    available_models = {"classical", "cnn", "hybrid_qcnn", "svm", "quantum_mlp", "hybrid_qcnn_svm"}
+    available_models = {"classical_mlp", "cnn", "svm", "quantum_mlp", "qcnn", "svm_qkernel"}
 
     if args.model not in available_models:
         print(f"[ERROR] Unsupported model '{args.model}'. Choose from: {', '.join(available_models)}.")
@@ -60,20 +60,20 @@ def main():
     )
 
     # ➤ Lancement du bon script en fonction du modèle choisi
-    if args.model == "classical":
-        run_train_classical(config)
+    if args.model == "classical_mlp":
+        run_train_classical_mlp(config)
         wandb.finish()
     elif args.model == "cnn":
         run_train_cnn(config)
         wandb.finish()
-    elif args.model == "hybrid_qcnn":
-        run_train_hybrid_qcnn(config)
+    elif args.model == "qcnn":
+        run_train_qcnn(config)
         wandb.finish()
     elif args.model == "quantum_mlp":
         run_train_quantum_mlp(config)
         wandb.finish()
-    elif args.model == "hybrid_qcnn_svm":
-        run_train_hybrid_qcnn_svm(config)
+    elif args.model == "svm_qkernel":
+        run_train_svm_qkernel(config)
         wandb.finish()
     elif args.model == "svm":
         config.setdefault("svm", {})

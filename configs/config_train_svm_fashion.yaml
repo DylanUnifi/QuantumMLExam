@@ -5,8 +5,6 @@ dataset:
 
 training:
   batch_size: 512
-  epochs: 1  # Dummy value for SVM (not used)
-  learning_rate: 0.001  # Dummy value for SVM (not used)
 
 binary_classes: [3, 8]  # Classe 3 contre 8 (modifiable selon ton objectif)
 

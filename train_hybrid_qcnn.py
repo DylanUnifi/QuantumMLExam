@@ -1,5 +1,5 @@
 # train_hybrid_qcnn.py
-# Version: 4.2 – Ajout Balanced Accuracy et AUC, logs complets alignés avec train_classical et hybrid_svm
+# Version: 4.2 – Nouvelle version pour Hybrid QCNN avec K-Fold Cross-Validation et intégration wandb
 
 import os
 import torch
