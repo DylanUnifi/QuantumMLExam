@@ -109,7 +109,7 @@ def run_train_svm(config):
         "val/precision": metrics["precision"],
         "val/recall": metrics["recall"],
         "val/balanced_accuracy": bal_acc,
-        "val/roc_auc": roc_auc
+        "val/auc": roc_auc
     })
 
     y_pred_val = final_model.predict(X_val_pca)
@@ -148,7 +148,7 @@ def run_train_svm(config):
             "test/precision": precision,
             "test/recall": recall,
             "test/balanced_accuracy": bal_acc_test,
-            "test/roc_auc": roc_auc_test
+            "test/auc": roc_auc_test
         })
 
         cm_test = confusion_matrix(y_test, y_pred_test)

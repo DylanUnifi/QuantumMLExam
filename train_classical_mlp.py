@@ -1,5 +1,5 @@
 # train_classical.py
-# Version: 4.2 – Ajout du logging AUC et balanced accuracy pour l’évaluation test
+# Version: 4.2 – Nouvelle version pour MLP classique avec K-Fold Cross-Validation et intégration wandb
 
 import os
 import torch
@@ -18,9 +18,9 @@ from utils.visual import save_plots
 from utils.logger import init_logger, write_log
 import wandb
 from tqdm import tqdm, trange
-from sklearn.metrics import roc_auc_score, balanced_accuracy_score  # 🔥 Ajout
+from sklearn.metrics import roc_auc_score, balanced_accuracy_score
 
-def run_train_classical(config):
+def run_train_classical_mlp(config):
     dataset_name = config["dataset"]["name"]  # Ex: "fashion-mnist", "cifar10", "svhn"
     base_exp_name = config.get("experiment_name", "default_exp")
     EXPERIMENT_NAME = f"{dataset_name}_{base_exp_name}"
@@ -213,7 +213,7 @@ def run_train_classical(config):
 
 if __name__ == "__main__":
     import yaml
-    with open("configs/config_train_classical_fashion.yaml", "r") as f:
+    with open("configs/config_train_classical_mlp_fashion.yaml", "r") as f:
         config = yaml.safe_load(f)
-    run_train_classical(config)
+    run_train_classical_mlp(config)
     wandb.finish()

@@ -1,5 +1,5 @@
 # train_cnn.py
-# Version: 4.1 – Ajout logs AUC et balanced accuracy sur le test set
+# Version: 4.1 – Nouvelle version pour CNN classique avec K-Fold Cross-Validation et intégration wandb
 
 import os
 import torch
@@ -8,7 +8,7 @@ import torch.optim as optim
 from torch.utils.data import Subset, DataLoader
 from sklearn.model_selection import KFold
 from torch.utils.tensorboard import SummaryWriter
-from sklearn.metrics import roc_auc_score, balanced_accuracy_score  # 🔥 Ajout
+from sklearn.metrics import roc_auc_score, balanced_accuracy_score
 
 from models.cnn import CNNBinaryClassifier
 from utils.checkpoint import save_checkpoint, safe_load_checkpoint
