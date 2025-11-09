@@ -5,7 +5,7 @@
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 
-This project systematically explores the **challenges and opportunities of Quantum Machine Learning (QML)** for binary classification tasks on standard image datasets, inspired by the review _Challenges and Opportunities in Quantum Machine Learning_ (Cerezo et al., 2023).
+This project systematically explores the **challenges and opportunities of Quantum Machine Learning (QML)** for binary classification tasks on standard image datasets, inspired by the review Challenges and Opportunities in Quantum Machine Learning (Cerezo et al., 2023).
 ````
 ````
 ## 🧑‍🔬 Intent
@@ -44,14 +44,14 @@ Results confirm **classical models' stability**, while **quantum models show pro
 
 Clone this repository:
 ```bash
-git clone https://github.com/yourusername/qml-binary-classification.git
-cd qml-binary-classification
+git clone https://github.com/DylanUnifi/QUANTUMMLEXAM.git
+cd QUANTUMMLEXAM
 ````
 
 Set up your environment (recommend using conda):
 
 ```bash
-conda env create -f environment.yml
+conda qml_project create -f environment.yml
 conda activate qml_project
 ```
 
@@ -61,7 +61,7 @@ Train a model (e.g., classical MLP on Fashion-MNIST):
 python train_classical.py --config configs/config_train_classical_fashion.yaml
 ```
 
-Train Quantum MLP on CIFAR-10:
+Train Quantum MLP on Fashion-MNIST:
 
 ```bash
 python train_quantum_mlp.py --config configs/config_train_quantum_mlp_cifar10.yaml
@@ -87,7 +87,7 @@ Training dynamics (loss, F1), confusion matrices, and quantum kernel matrices ar
 
 ## 📸 Example Outputs
 
-Here’s a sample of training dynamics for the classical MLP on Fashion-MNIST:
+Here’s a sample of training dynamics for the Quantum MLP on Fashion-MNIST:
 
 ### F1-score progression
 

@@ -17,11 +17,11 @@ training:
 
 model:
   input_size: 784  # 28x28 flattened Fashion_MNIST
-  hidden_sizes: [256, 128, 64]  # optional if tu veux les customiser
+  hidden_sizes: [256, 128, 64]  # optionel si tu veux les customiser
 
 checkpoint:
   save_dir: "checkpoints"
-  subdir: "quantum_mlp"
+  subdir: "fashion_mnist_quantum_mlp"
 
 quantum:
   n_qubits: 4

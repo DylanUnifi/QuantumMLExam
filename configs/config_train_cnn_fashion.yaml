@@ -15,9 +15,9 @@ training:
 model:
   in_channels: 1  # Fashion-MNIST est en niveaux de gris comme MNIST
   hidden_sizes: [128, 64, 32]
-  grayscale: true   # 🔥 Ajout clé ici : permet de choisir depuis le yaml
+  grayscale: true   # permet de choisir depuis le yaml
 
 checkpoint:
   save_dir: "checkpoints"
-  subdir: "cnn_fashionmnist_experiment"
+  subdir: "fashion_mnist_cnn"
 

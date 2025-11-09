@@ -1,4 +1,4 @@
-experiment_name: "hybrid_qcnn_fashion_exp"
+experiment_name: "qcnn_fashion_exp"
 
 dataset:
   name: fashion_mnist
@@ -18,14 +18,13 @@ training:
 
 model:
   input_size: 784  # Fashion-MNIST images 28x28 aplaties
-  quantum:
-    n_qubits: 8
-    n_layers: 2
-    backend: "default.qubit"
+  in_channels: 1  # Fashion-MNIST est en niveaux de gris comme MNIST
+  hidden_sizes: [128, 64, 32]
+  grayscale: true   # permet de choisir depuis le yaml
 
 checkpoint:
   save_dir: "checkpoints"
-  subdir: "hybrid_qcnn_fashion_mnist_experiment"
+  subdir: "fashion_mnist_qcnn"
 
 quantum:
   n_qubits: 4

@@ -2,7 +2,7 @@ experiment_name: "classical_fashion_exp"
 
 dataset:
   name: "fashion_mnist"             # Options: fashion_mnist, cifar10, svhn
-  binary_classes: [3, 8]          # Binaire : première classe = 0, seconde = 1
+  binary_classes: [3, 8]          # Binaire : première classe = 3, seconde = 8
   in_channels: 1
 
 model:
@@ -19,6 +19,6 @@ training:
 
 checkpoint:
   save_dir: "checkpoints"
-  subdir: "experiment_mlp_v1"
+  subdir: "fashion_mnist_classical_mlp"
 
 seed: 42

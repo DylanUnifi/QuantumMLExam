@@ -29,3 +29,7 @@ quantum:
   n_qubits: 4                # Nombre de qubits dans le circuit quantique
   layers: 2                  # Nombre de couches dans le circuit
   backend: "lightning.qubit" # Backend PennyLane: default.qubit, lightning.qubit, etc.
+
+checkpoint:
+  save_dir: "checkpoints"
+  subdir: "fashion_mnist_qcnn_svm"

@@ -50,7 +50,7 @@ def run_train_hybrid_qcnn(config):
         binary_classes=config.get("binary_classes", [3, 8])
     )
 
-    indices = torch.randperm(len(train_dataset))[:3000]
+    indices = torch.randperm(len(train_dataset))[:500]
     train_dataset = Subset(train_dataset, indices)
 
     print(f"Nombre d'exemples chargés dans train_dataset : {len(train_dataset)}")
