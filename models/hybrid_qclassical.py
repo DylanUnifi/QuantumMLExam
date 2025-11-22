@@ -36,8 +36,13 @@ class QuantumLayer(nn.Module):
 
         device_kwargs = {"wires": n_qubits, "shots": shots}
         selected_backend = backend
-        if use_gpu and torch.cuda.is_available() and backend.startswith("lightning"):
-            selected_backend = "lightning.gpu"
+
+        if backend.startswith("lightning"):
+            if use_gpu and torch.cuda.is_available():
+                selected_backend = "lightning.gpu"
+            elif use_gpu and backend != "lightning.kokkos":
+                # leverage Kokkos as a CPU-accelerated fallback when GPU is requested but unavailable
+                selected_backend = "lightning.kokkos"
 
         self.dev = qml.device(selected_backend, **device_kwargs)  # backend différentiable
 
