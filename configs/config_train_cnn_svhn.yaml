@@ -1,9 +1,13 @@
 experiment_name: "cnn_svhn_exp"
 
 dataset:
-  name: "svhn"            # Dataset SVHN
-  binary_classes: [3, 8]  # Tes classes cibles
-  grayscale: false        # ⚠️ SVHN est en couleurs, pas en niveaux de gris !
+  name: "svhn"            
+  binary_classes: [3, 8]        
+
+model: 
+  in_channels: 3  
+  hidden_sizes: [512, 256, 128, 64, 32]
+  grayscale: false   
 
 training:
   batch_size: 64
@@ -11,8 +15,8 @@ training:
   learning_rate: 0.001
   kfold: 3
   early_stopping: 15
-  scheduler: "StepLR"
+  scheduler: "none"
 
-model:
-  in_channels: 3          # SVHN a 3 canaux (RGB)
-
+checkpoint:
+  save_dir: "checkpoints"
+  subdir: "svhn_cnn"
