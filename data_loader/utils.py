@@ -115,12 +115,15 @@ SUPPORTED_DATASETS = {
 #         raise ValueError(f"Dataset '{name}' non supporté. Disponibles: {list(SUPPORTED_DATASETS.keys())}")
 #     return SUPPORTED_DATASETS[name](**kwargs)
 
-def load_dataset_by_name(name, batch_size=64, binary_classes=[3, 8], grayscale=True, root='./data'):
+def load_dataset_by_name(name, batch_size=64, binary_classes=[3, 8], grayscale=None, root='./data'):
     """
     Charge le dataset spécifié et renvoie train_dataset, test_dataset.
     """
+    if grayscale is None:
+        grayscale = name.lower() not in {"cifar10", "svhn"}
+
     if name.lower() == 'fashion_mnist':
-        transform = build_transform(grayscale=True)
+        transform = build_transform(grayscale=grayscale)
         train_set = datasets.FashionMNIST(root=root, train=True, download=True, transform=transform)
         test_set = datasets.FashionMNIST(root=root, train=False, download=True, transform=transform)
 
