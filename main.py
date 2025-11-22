@@ -7,7 +7,6 @@ import torch
 import random
 import sys
 import wandb
-from train_hybrid_qcnn_svm import run_train_hybrid_qcnn_svm
 
 from configs.config import load_config
 from train_classical import run_train_classical
