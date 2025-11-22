@@ -93,9 +93,14 @@ def compute_kernel_matrix_with_progress(X_left, X_right, kernel_fn, workers: int
     if workers == 1:
         rows = [_compute_kernel_row(X_left[i], X_right, kernel_fn) for i in iterator]
     else:
-        rows = Parallel(n_jobs=workers, prefer="threads")(
-            delayed(_compute_kernel_row)(X_left[i], X_right, kernel_fn) for i in iterator
-        )
+        try:
+            rows = Parallel(n_jobs=workers, prefer="processes", backend="loky")(
+                delayed(_compute_kernel_row)(X_left[i], X_right, kernel_fn) for i in iterator
+            )
+        except Exception as exc:
+            print(f"[Warning] Parallel kernel computation failed ({exc}); falling back to single-worker mode.")
+            rows = [_compute_kernel_row(X_left[i], X_right, kernel_fn) for i in tqdm(range(len(X_left)), desc=f"{desc} (fallback)")]
+
     return np.array(rows)
 
 
