@@ -42,11 +42,11 @@ def build_kernel_fn(n_wires: int, n_layers: int, rotation: str = "Y", device_nam
             qml.CSWAP(wires=[ancilla, register_a[i], register_b[i]])
         qml.Hadamard(wires=ancilla)
 
-        # Probability of ancilla measuring |0> is (1 + fidelity)/2
-        return qml.Projector([0], wires=ancilla)
+        # Probability of ancilla being |0> encodes fidelity via F = 2 * p0 - 1
+        return qml.probs(wires=ancilla)
 
     def fidelity_kernel(x, y):
-        prob_zero = swap_test_kernel(x, y)
+        prob_zero = swap_test_kernel(x, y)[0]
         return 2 * prob_zero - 1
 
     return fidelity_kernel
