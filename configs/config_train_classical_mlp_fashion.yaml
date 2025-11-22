@@ -1,21 +1,21 @@
 experiment_name: "classical_mlp_exp"
 
 dataset:
-  name: "fashion_mnist"             # Options: fashion_mnist, cifar10, svhn
-  binary_classes: [3, 8]          # Binaire : première classe = 3, seconde = 8
-  in_channels: 1
-
+  name: "fashion_mnist"             
+  binary_classes: [3, 8]          
+  
 model:
-  input_size: 784                   # 28x28 images aplaties
+  in_channels: 1                 
   hidden_sizes: [512, 256, 128, 64, 32]
+  grayscale: true
 
 training:
   batch_size: 128
   epochs: 20
   learning_rate: 0.001
   kfold: 3
-  scheduler: "none" # Options: step, cosine, none
-  early_stopping: 10                # Patience in epochs
+  early_stopping: 10
+  scheduler: "none"                
 
 checkpoint:
   save_dir: "checkpoints"
