@@ -20,46 +20,63 @@ import wandb
 
 
 def build_kernel_fn(n_wires: int, n_layers: int, rotation: str = "Y", device_name: str = "default.qubit"):
-    wires = list(range(n_wires))
-    dev = qml.device(device_name, wires=n_wires)
+    register_a = list(range(n_wires))
+    register_b = list(range(n_wires, 2 * n_wires))
+    ancilla = 2 * n_wires
+    dev = qml.device(device_name, wires=2 * n_wires + 1)
 
-    @qml.qnode(dev)
-    def feature_map(x):
+    def _embed_and_entangle(x, wires):
         qml.AngleEmbedding(x, wires=wires, rotation=rotation)
         for _ in range(n_layers):
             for i, w in enumerate(wires):
                 qml.CZ(wires=[w, wires[(i + 1) % len(wires)]])
             qml.AngleEmbedding(x, wires=wires, rotation=rotation)
-        return qml.state()
+
+    @qml.qnode(dev)
+    def swap_test_kernel(x, y):
+        _embed_and_entangle(x, register_a)
+        _embed_and_entangle(y, register_b)
+
+        qml.Hadamard(wires=ancilla)
+        for i in range(n_wires):
+            qml.CSWAP(wires=[ancilla, register_a[i], register_b[i]])
+        qml.Hadamard(wires=ancilla)
+
+        # Probability of ancilla measuring |0> is (1 + fidelity)/2
+        return qml.probs(wires=ancilla)
 
     def fidelity_kernel(x, y):
-        psi_x = feature_map(x)
-        psi_y = feature_map(y)
-        overlap = qml.math.dot(qml.math.conj(psi_x), psi_y)
-        return qml.math.abs(overlap) ** 2
+        prob_zero = swap_test_kernel(x, y)[0]
+        return 2 * prob_zero - 1
 
     return fidelity_kernel
 
 
-def select_device_name(qkernel_cfg, n_wires: int):
+def select_device_name(qkernel_cfg, n_wires: int, total_wires: int):
     base_device = qkernel_cfg.get("device", "default.qubit")
     use_gpu = qkernel_cfg.get("use_gpu", False)
     gpu_device = qkernel_cfg.get("gpu_device", "lightning.gpu")
+    kokkos_device = qkernel_cfg.get("kokkos_device", "lightning.kokkos")
 
     if not use_gpu:
         return base_device
 
-    if not torch.cuda.is_available():
-        print("[Warning] GPU requested for qkernel but CUDA is not available; falling back to CPU device.")
-        return base_device
+    if torch.cuda.is_available():
+        try:
+            qml.device(gpu_device, wires=total_wires)
+            print(f"[Info] Using GPU-backed PennyLane device: {gpu_device}")
+            return gpu_device
+        except Exception as exc:  # pragma: no cover - backend availability depends on environment
+            print(f"[Warning] Could not create GPU device '{gpu_device}' ({exc}); trying kokkos fallback...")
+    else:
+        print("[Warning] GPU requested for qkernel but CUDA is not available; trying kokkos fallback...")
 
     try:
-        # Probe the GPU-backed device to ensure PennyLane can instantiate it
-        qml.device(gpu_device, wires=n_wires)
-        print(f"[Info] Using GPU-backed PennyLane device: {gpu_device}")
-        return gpu_device
+        qml.device(kokkos_device, wires=total_wires)
+        print(f"[Info] Using CPU-accelerated PennyLane device: {kokkos_device}")
+        return kokkos_device
     except Exception as exc:  # pragma: no cover - backend availability depends on environment
-        print(f"[Warning] Could not create GPU device '{gpu_device}' ({exc}); falling back to {base_device}.")
+        print(f"[Warning] Could not create kokkos device '{kokkos_device}' ({exc}); falling back to {base_device}.")
         return base_device
 
 
@@ -120,7 +137,8 @@ def run_train_svm_qkernel(config):
     n_wires = qkernel_cfg.get("n_wires", 6)
     n_layers = qkernel_cfg.get("n_layers", 2)
     rotation = qkernel_cfg.get("rotation", "Y")
-    device_name = select_device_name(qkernel_cfg, n_wires)
+    total_wires = 2 * n_wires + 1
+    device_name = select_device_name(qkernel_cfg, n_wires, total_wires)
     use_pca = qkernel_cfg.get("use_pca", True)
     pca_components = qkernel_cfg.get("pca_components", n_wires)
     max_samples = qkernel_cfg.get("max_samples", 1500)

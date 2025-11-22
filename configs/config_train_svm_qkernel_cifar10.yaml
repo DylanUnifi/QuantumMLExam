@@ -14,6 +14,7 @@ qkernel:
   rotation: "Y"
   device: "default.qubit"
   gpu_device: "lightning.gpu"
+  kokkos_device: "lightning.kokkos"
   use_gpu: true
   use_pca: true
   pca_components: 8

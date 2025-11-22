@@ -14,10 +14,11 @@ qkernel:
   rotation: "Y"
   device: "default.qubit"
   gpu_device: "lightning.gpu"
+  kokkos_device: "lightning.kokkos"
   use_gpu: true
   use_pca: true
   pca_components: 6
-  max_samples: 500
+  max_samples: 2000
   C: 2.0
   kernel_workers: 4
 
