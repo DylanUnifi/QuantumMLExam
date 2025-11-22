@@ -48,11 +48,12 @@ def run_train_cnn(config):
     CONV_CHANNELS = config['model'].get('conv_channels')
     HIDDEN_SIZES = config['model'].get('hidden_sizes')
 
+    dataset_cfg = config.get("dataset", {})
     train_dataset, test_dataset = load_dataset_by_name(
-        name=config["dataset"]["name"],
+        name=dataset_cfg.get("name"),
         batch_size=BATCH_SIZE,
-        binary_classes=config.get("binary_classes", [3, 8]),
-        grayscale=config["dataset"].get("grayscale", None)
+        binary_classes=dataset_cfg.get("binary_classes", [3, 8]),
+        grayscale=dataset_cfg.get("grayscale", config.get("model", {}).get("grayscale"))
     )
 
     indices = torch.randperm(len(train_dataset))[:3000]

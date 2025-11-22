@@ -46,10 +46,12 @@ def run_train_quantum_mlp(config):
     IN_CHANNELS = config['model']['in_channels']
     
 
+    dataset_cfg = config.get("dataset", {})
     train_dataset, test_dataset = load_dataset_by_name(
-        name=config["dataset"]["name"],
+        name=dataset_cfg.get("name"),
         batch_size=BATCH_SIZE,
-        binary_classes=config.get("binary_classes", [0, 1])
+        binary_classes=dataset_cfg.get("binary_classes", [0, 1]),
+        grayscale=dataset_cfg.get("grayscale", config.get("model", {}).get("grayscale"))
     )
 
     print(f"Nombre d'exemples chargés dans train_dataset : {len(train_dataset)}")

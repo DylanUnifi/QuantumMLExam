@@ -38,10 +38,12 @@ def run_train_classical_mlp(config):
     PATIENCE = config["training"]["early_stopping"]
     SCHEDULER_TYPE = config.get("scheduler", None)
 
+    dataset_cfg = config.get("dataset", {})
     train_dataset, test_dataset = load_dataset_by_name(
-        name=config["dataset"]["name"],
+        name=dataset_cfg.get("name"),
         batch_size=BATCH_SIZE,
-        binary_classes=config.get("binary_classes", [3, 8])
+        binary_classes=dataset_cfg.get("binary_classes", [3, 8]),
+        grayscale=dataset_cfg.get("grayscale", config.get("model", {}).get("grayscale"))
     )
 
     print(f"Nombre d'exemples chargés dans train_dataset : {len(train_dataset)}")

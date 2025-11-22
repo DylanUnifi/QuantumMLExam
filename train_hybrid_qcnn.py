@@ -44,10 +44,12 @@ def run_train_hybrid_qcnn(config):
     Q_BACKEND = QUANTUM_CFG.get("backend", "lightning.qubit")
     Q_SHOTS = QUANTUM_CFG.get("shots", None)
 
+    dataset_cfg = config.get("dataset", {})
     train_dataset, test_dataset = load_dataset_by_name(
         name=dataset_name,
         batch_size=BATCH_SIZE,
-        binary_classes=config.get("binary_classes", [3, 8])
+        binary_classes=dataset_cfg.get("binary_classes", [3, 8]),
+        grayscale=dataset_cfg.get("grayscale", config.get("model", {}).get("grayscale"))
     )
 
     print(f"Nombre d'exemples chargés dans train_dataset : {len(train_dataset)}")
