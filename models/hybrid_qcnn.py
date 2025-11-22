@@ -26,15 +26,13 @@ class ResidualBlock(nn.Module):
         out += identity
         return F.relu(out)
 
-def create_quantum_layer(n_qubits, n_layers=2):
-    dev = qml.device("lightning.qubit", wires=n_qubits, shots=None)  # backend différentiable
+def create_quantum_layer(n_qubits, n_layers=2, backend="lightning.qubit", shots=None):
+    dev = qml.device(backend, wires=n_qubits, shots=shots)  # backend différentiable
 
     @qml.qnode(dev, interface="torch")
     def qnode(inputs, weights):
-        inputs = inputs.flatten()
-        for i in range(n_qubits):
-            qml.RY(inputs[i], wires=i)
-            qml.RZ(inputs[i], wires=i)  # double rotation pour enrichir l’encoding
+        qml.templates.AngleEmbedding(inputs, wires=range(n_qubits), rotation="RY")
+        qml.templates.AngleEmbedding(inputs, wires=range(n_qubits), rotation="RZ")
         qml.templates.BasicEntanglerLayers(weights, wires=range(n_qubits))
         return [qml.expval(qml.PauliZ(i)) for i in range(n_qubits)]
 
@@ -49,33 +47,69 @@ def create_quantum_layer(n_qubits, n_layers=2):
     return layer
 
 class HybridQCNNBinaryClassifier(nn.Module):
-    def __init__(self, input_channel = 1, dropout=0.3, n_qubits=4, n_layers=1):
+    def __init__(
+        self,
+        input_channel=1,
+        dropout=0.3,
+        n_qubits=4,
+        n_layers=1,
+        backend="lightning.qubit",
+        shots=None,
+        conv_channels=None,
+        hidden_sizes=None,
+    ):
         super().__init__()
-        self.layer1 = ResidualBlock(input_channel, 32)
-        self.layer2 = ResidualBlock(32, 64, downsample=True)
-        self.layer3 = ResidualBlock(64, 128, downsample=True)
+        self.input_channel = input_channel
+
+        if conv_channels is None:
+            conv_channels = [32, 64, 128]
+
+        self.conv_blocks = nn.ModuleList()
+        in_ch = input_channel
+        for idx, out_ch in enumerate(conv_channels):
+            downsample = idx > 0  # reduce spatial dimensions after the first block
+            self.conv_blocks.append(ResidualBlock(in_ch, out_ch, downsample=downsample))
+            in_ch = out_ch
+
         self.global_pool = nn.AdaptiveAvgPool2d((1, 1))
         self.dropout = nn.Dropout(dropout)
-        self.quantum_fc_input = nn.Linear(128, n_qubits)
-        self.quantum_layer = create_quantum_layer(n_qubits, n_layers)
+
+        if hidden_sizes is None:
+            hidden_sizes = []
+
+        fc_layers = []
+        prev_dim = in_ch
+        for hidden_dim in hidden_sizes:
+            fc_layers.append(nn.Linear(prev_dim, hidden_dim))
+            fc_layers.append(nn.ReLU())
+            fc_layers.append(nn.Dropout(dropout))
+            prev_dim = hidden_dim
+        self.classical_head = nn.Sequential(*fc_layers)
+
+        self.quantum_fc_input = nn.Linear(prev_dim, n_qubits)
+        self.quantum_layer = create_quantum_layer(n_qubits, n_layers, backend=backend, shots=shots)
         self.bn_q = nn.LayerNorm(n_qubits)
         self.final_fc = nn.Linear(n_qubits, 1)
 
     def forward(self, x):
-        x = self.layer1(x)
-        x = self.layer2(x)
-        x = self.layer3(x)
+        if x.dim() == 2:
+            side = int((x.size(1) / self.input_channel) ** 0.5)
+            if side * side * self.input_channel != x.size(1):
+                raise ValueError(
+                    f"Impossible de remodeler l'entrée de taille {x.size(1)} en image (canaux={self.input_channel})."
+                )
+            x = x.view(x.size(0), self.input_channel, side, side)
+        elif x.dim() != 4:
+            raise ValueError("L'entrée du HybridQCNNBinaryClassifier doit être 4D (N, C, H, W).")
+
+        for block in self.conv_blocks:
+            x = block(x)
         x = self.global_pool(x)
         x = x.view(x.size(0), -1)
         x = self.dropout(x)
+        x = self.classical_head(x)
         x = torch.tanh(self.quantum_fc_input(x)) * np.pi  # mapping [-π, π]
-
-        outputs = []
-        for sample in x:
-            q_out = self.quantum_layer(sample.unsqueeze(0))
-            outputs.append(q_out)
-        x = torch.cat(outputs, dim=0)
-
+        x = self.quantum_layer(x)
         x = self.bn_q(x)
         x = self.final_fc(x)
         return torch.sigmoid(x)

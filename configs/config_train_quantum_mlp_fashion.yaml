@@ -10,6 +10,10 @@ training:
   learning_rate: 0.0005      # LR initial pour Adam
   kfold: 3                   # Nombre de splits pour KFold cross-validation
   early_stopping: 10          # Patience d'early stopping
+  num_workers: 2
+  pin_memory: true
+  prefetch_factor: 2
+  persistent_workers: true
   scheduler: "StepLR"          # Options: null, StepLR, MultiStepLR, CosineAnnealingLR
   scheduler_params:
     step_size: 10              # Applicable à StepLR

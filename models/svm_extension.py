@@ -5,28 +5,55 @@ from sklearn.base import BaseEstimator, ClassifierMixin
 import joblib
 import torch
 
+
 class EnhancedSVM(BaseEstimator, ClassifierMixin):
-    def __init__(self, C=1.0, kernel='rbf', gamma='scale', use_pca=False, pca_model=None, save_path=None, probability=False):
+    def __init__(
+        self,
+        C=1.0,
+        kernel='rbf',
+        gamma='scale',
+        use_pca=False,
+        pca_model=None,
+        scaler=None,
+        save_path=None,
+        probability=False,
+        auto_transform=True,
+    ):
         self.C = C
         self.kernel = kernel
         self.gamma = gamma
         self.use_pca = use_pca
         self.pca_model = pca_model
+        self.scaler = scaler
         self.save_path = save_path or './enhanced_svm.pkl'
+        self.auto_transform = auto_transform
         self.model = SVC(C=self.C, kernel=self.kernel, gamma=self.gamma, probability=probability)
 
+    def _transform_input(self, X):
+        if not self.auto_transform:
+            return X
+        X_transformed = X
+        if self.scaler is not None:
+            X_transformed = self.scaler.transform(X_transformed)
+        if self.use_pca and self.pca_model is not None:
+            X_transformed = self.pca_model.transform(X_transformed)
+        return X_transformed
+
     def fit(self, X, y):
-        self.model.fit(X, y)
+        X_transformed = self._transform_input(X)
+        self.model.fit(X_transformed, y)
         return self
 
     def predict(self, X):
-        return self.model.predict(X)
+        X_transformed = self._transform_input(X)
+        return self.model.predict(X_transformed)
 
     def predict_proba(self, X):
         """
         Retourne les probabilités (uniquement si probability=True au fit)
         """
-        return self.model.predict_proba(X)
+        X_transformed = self._transform_input(X)
+        return self.model.predict_proba(X_transformed)
 
     def evaluate(self, X, y_true):
         y_pred = self.predict(X)
