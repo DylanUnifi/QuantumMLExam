@@ -47,7 +47,8 @@ def run_train_svm(config):
     os.makedirs(LOG_DIR, exist_ok=True)
 
     batch_size = config["training"]["batch_size"]
-    binary_classes = config.get("binary_classes", [3, 8])
+    dataset_cfg = config.get("dataset", {})
+    binary_classes = dataset_cfg.get("binary_classes", [3, 8])
     use_pca = config["svm"].get("use_pca", False)
     pca_components = config["svm"].get("pca_components", 50)
 
@@ -57,7 +58,8 @@ def run_train_svm(config):
     train_dataset, test_dataset = load_dataset_by_name(
         name=dataset_name,
         batch_size=batch_size,
-        binary_classes=binary_classes
+        binary_classes=binary_classes,
+        grayscale=dataset_cfg.get("grayscale", config.get("model", {}).get("grayscale"))
     )
 
     indices = torch.randperm(len(train_dataset))[:3000]
