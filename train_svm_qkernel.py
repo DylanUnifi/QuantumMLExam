@@ -27,7 +27,8 @@ def build_kernel_fn(n_wires: int, n_layers: int, rotation: str = "Y", device_nam
     def feature_map(x):
         qml.AngleEmbedding(x, wires=wires, rotation=rotation)
         for _ in range(n_layers):
-            qml.broadcast(qml.CZ, wires=wires, pattern="ring")
+            for i, w in enumerate(wires):
+                qml.CZ(wires=[w, wires[(i + 1) % len(wires)]])
             qml.AngleEmbedding(x, wires=wires, rotation=rotation)
         return qml.state()
 
