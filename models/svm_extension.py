@@ -31,6 +31,7 @@ class EnhancedSVM(BaseEstimator, ClassifierMixin):
         self.use_gpu = use_gpu
         self.probability = probability
         self.xp = None
+        self._xp_module_name = None
         self.model = self._build_model()
 
     def _build_model(self):
@@ -40,12 +41,14 @@ class EnhancedSVM(BaseEstimator, ClassifierMixin):
                 from cuml.svm import SVC as cuSVC  # type: ignore
 
                 self.xp = cp
+                self._xp_module_name = 'cupy'
                 return cuSVC(C=self.C, kernel=self.kernel, gamma=self.gamma, probability=self.probability)
             except Exception as e:
                 print(f"[Warning] GPU SVM unavailable ({e}), falling back to CPU sklearn SVC.")
 
         import numpy as np
         self.xp = np
+        self._xp_module_name = 'numpy'
         return SVC(C=self.C, kernel=self.kernel, gamma=self.gamma, probability=self.probability)
 
     def _transform_input(self, X):
@@ -107,12 +110,32 @@ class EnhancedSVM(BaseEstimator, ClassifierMixin):
     def save(self):
         os.makedirs(self.save_path, exist_ok=True)
         model_path = os.path.join(self.save_path, "svm_model.pkl")
+        xp_backup = self.xp
         joblib.dump(self, model_path)
-        print(f"Modèle sauvegardé avec succès : {model_path}")
+        self.xp = xp_backup
+        print(f"✅ Modèle sauvegardé avec succès : {model_path}")
 
     @staticmethod
     def load(path):
         return joblib.load(path)
+
+    def __getstate__(self):
+        state = self.__dict__.copy()
+        state['xp'] = None
+        return state
+
+    def __setstate__(self, state):
+        self.__dict__.update(state)
+        try:
+            if self._xp_module_name == 'cupy':
+                import cupy as cp  # type: ignore
+                self.xp = cp
+            else:
+                import numpy as np
+                self.xp = np
+        except Exception:
+            import numpy as np
+            self.xp = np
 
     def to_torch_tensor(self, X):
         return torch.tensor(X, dtype=torch.float32).cuda() if torch.cuda.is_available() else torch.tensor(X)
