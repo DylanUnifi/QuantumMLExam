@@ -61,12 +61,6 @@ def run_train_svm(config):
     LOG_DIR = os.path.join(SAVE_DIR, "logs")
     os.makedirs(SAVE_DIR, exist_ok=True)
 
-    wandb.init(
-        project="qml_project",
-        name=EXPERIMENT_NAME,
-        config=config
-    )
-
     os.makedirs(LOG_DIR, exist_ok=True)
 
     batch_size = config.get("training", {}).get("batch_size", 256)
@@ -233,10 +227,3 @@ def run_train_svm(config):
         joblib.dump(study, os.path.join(SAVE_DIR, "optuna_study.pkl"))
     log_file.close()
     print("SVM training complete.")
-    wandb.finish()
-
-if __name__ == "__main__":
-    import yaml
-    with open("configs/config_train_svm_fashion.yaml", "r") as f:
-        config = yaml.safe_load(f)
-    run_train_svm(config)

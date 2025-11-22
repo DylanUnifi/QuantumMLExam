@@ -4,12 +4,8 @@ dataset:
   name: cifar10
   binary_classes: [3, 8]
 
-training:
-  epochs: 1  # Dummy value
-  batch_size: 256
-
 svm:
-  use_pca: false
+  use_pca: true
   pca_components: 50
   optimize: true
   n_trials: 30
