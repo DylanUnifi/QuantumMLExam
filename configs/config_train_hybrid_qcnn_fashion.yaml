@@ -27,5 +27,4 @@ training:
 
 checkpoint:
   save_dir: "checkpoints"
-  subdir: "fashion_mnist_qcnn"
-
+  subdir: "fashion_mnist_hybrid_qcnn"

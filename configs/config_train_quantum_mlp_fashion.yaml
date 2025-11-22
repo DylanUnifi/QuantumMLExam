@@ -4,26 +4,27 @@ dataset:
   name: "fashion_mnist"
   selected_classes: [3, 8]
 
-training:
-  batch_size: 64
-  epochs: 20                # Nombre d'époques pour l'entraînement du feature extractor
-  learning_rate: 0.0005      # LR initial pour Adam
-  kfold: 3                   # Nombre de splits pour KFold cross-validation
-  early_stopping: 10          # Patience d'early stopping
-  scheduler: "StepLR"          # Options: null, StepLR, MultiStepLR, CosineAnnealingLR
-  scheduler_params:
-    step_size: 10              # Applicable à StepLR
-    gamma: 0.5                 # Facteur de réduction du LR
-
-model:
-  input_size: 784  # 28x28 flattened Fashion_MNIST
-  hidden_sizes: [256, 128, 64]  # optionel si tu veux les customiser
-
-checkpoint:
-  save_dir: "checkpoints"
-  subdir: "fashion_mnist_quantum_mlp"
+model: 
+  in_channels: 1  
+  hidden_sizes: [512, 256, 128, 64, 32]
+  grayscale: true 
 
 quantum:
   n_qubits: 4
   layers: 1
   backend: "lightning.qubit"
+
+training:
+  batch_size: 64
+  epochs: 20                
+  learning_rate: 0.0005      
+  kfold: 3                   
+  early_stopping: 10          
+  scheduler: "none"          
+  scheduler_params:
+    step_size: 10              
+    gamma: 0.5                 
+
+checkpoint:
+  save_dir: "checkpoints"
+  subdir: "fashion_mnist_quantum_mlp"

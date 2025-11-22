@@ -27,6 +27,4 @@ training:
 
 checkpoint:
   save_dir: "checkpoints"
-  subdir: "cifar10_qcnn"
-
-
+  subdir: "cifar10_hybrid_qcnn"

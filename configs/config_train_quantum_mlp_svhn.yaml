@@ -4,6 +4,16 @@ dataset:
   name: "svhn"
   binary_classes: [3, 8]
 
+model: 
+  in_channels: 3  
+  hidden_sizes: [512, 256, 128, 64, 32]
+  grayscale: false  
+
+quantum:
+  n_qubits: 6
+  layers: 3
+  backend: "lightning.qubit"
+
 training:
   batch_size: 32
   epochs: 30
@@ -15,7 +25,6 @@ training:
     step_size: 10
     gamma: 0.5
 
-quantum:
-  n_qubits: 6
-  layers: 3
-  backend: "lightning.qubit"
+checkpoint:
+  save_dir: "checkpoints"
+  subdir: "svhn_quantum_mlp"
