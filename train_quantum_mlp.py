@@ -43,15 +43,14 @@ def run_train_quantum_mlp(config):
     KFOLD = config["training"]["kfold"]
     PATIENCE = config["training"]["early_stopping"]
     SCHEDULER_TYPE = config.get("scheduler", None)
+    IN_CHANNELS = config['model']['in_channels']
+    
 
     train_dataset, test_dataset = load_dataset_by_name(
         name=config["dataset"]["name"],
         batch_size=BATCH_SIZE,
         binary_classes=config.get("binary_classes", [0, 1])
     )
-
-    indices = torch.randperm(len(train_dataset))[:500]
-    train_dataset = Subset(train_dataset, indices)
 
     print(f"Nombre d'exemples chargés dans train_dataset : {len(train_dataset)}")
 
