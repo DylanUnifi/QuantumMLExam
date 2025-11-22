@@ -7,6 +7,7 @@ import torch
 import random
 import sys
 import wandb
+import os
 
 from configs.config import load_config
 from train_classical_mlp import run_train_classical_mlp
