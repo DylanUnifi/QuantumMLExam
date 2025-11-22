@@ -28,7 +28,13 @@ def build_kernel_fn(n_wires: int, n_layers: int, rotation: str = "Y", device_nam
             qml.AngleEmbedding(x, wires=wires, rotation=rotation, normalize=True)
         return qml.state()
 
-    return qml.kernels.state_kernel(feature_map)
+    def fidelity_kernel(x, y):
+        psi_x = feature_map(x)
+        psi_y = feature_map(y)
+        overlap = qml.math.dot(qml.math.conj(psi_x), psi_y)
+        return qml.math.abs(overlap) ** 2
+
+    return fidelity_kernel
 
 
 def select_device_name(qkernel_cfg, n_wires: int):
