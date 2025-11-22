@@ -43,8 +43,8 @@ def create_quantum_layer(
 
     @qml.qnode(dev, interface="torch")
     def qnode(inputs, weights):
-        qml.templates.AngleEmbedding(inputs, wires=range(n_qubits), rotation="RY")
-        qml.templates.AngleEmbedding(inputs, wires=range(n_qubits), rotation="RZ")
+        qml.templates.AngleEmbedding(inputs, wires=range(n_qubits), rotation="Y")
+        qml.templates.AngleEmbedding(inputs, wires=range(n_qubits), rotation="Z")
         qml.templates.BasicEntanglerLayers(weights, wires=range(n_qubits))
         return [qml.expval(qml.PauliZ(i)) for i in range(n_qubits)]
 
