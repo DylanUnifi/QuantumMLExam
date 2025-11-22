@@ -1,8 +1,10 @@
 #!/bin/bash
 
+set -euo pipefail
+
 # Script : train_all_fashion.sh
 # But : entraîner tous les modèles pertinents sur Fashion-MNIST avec main.py
-# et enregistrer les logs_fashion dans le dossier logs_fashion/
+# et enregistrer les logs dans le dossier logs_fashion/
 
 mkdir -p logs_fashion
 
@@ -24,12 +26,7 @@ python main.py --model quantum_mlp --config configs/config_train_quantum_mlp_fas
 echo "=============================="
 echo "Training Hybrid QCNN..."
 echo "=============================="
-python main.py --model hybrid_qcnn --config configs/config_train_qcnn_fashion.yaml | tee logs_fashion/hybrid_qcnn.log
-
-echo "=============================="
-echo "Training Hybrid QCNN + SVM..."
-echo "=============================="
-python main.py --model svm_qkernel --config configs/config_train_hybrid_qcnn_svm_fashion.yaml | tee logs_fashion/svm_qkernel.log
+python main.py --model hybrid_qcnn --config configs/config_train_hybrid_qcnn_fashion.yaml | tee logs_fashion/hybrid_qcnn.log
 
 echo "=============================="
 echo "Training Classical SVM..."
@@ -37,4 +34,9 @@ echo "=============================="
 python main.py --model svm --config configs/config_train_svm_fashion.yaml --optimize | tee logs_fashion/svm.log
 
 echo "=============================="
-echo "All trainings finished!"
+echo "Training Quantum Kernel SVM..."
+echo "=============================="
+python main.py --model svm_qkernel --config configs/config_train_svm_qkernel_fashion.yaml | tee logs_fashion/svm_qkernel.log
+
+echo "=============================="
+echo "All trainings on Fashion-MNIST finished!"
