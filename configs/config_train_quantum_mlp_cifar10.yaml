@@ -29,7 +29,3 @@ training:
   scheduler_params:
     step_size: 10
     gamma: 0.5
-    
-checkpoint:
-  save_dir: "checkpoints"
-  subdir: "cifar10_quantum_mlp"
