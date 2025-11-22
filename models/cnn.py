@@ -28,21 +28,42 @@ class ResidualBlock(nn.Module):
 
 
 class CNNBinaryClassifier(nn.Module):
-    def __init__(self, in_channels=1, dropout=0.3):
+    def __init__(self, in_channels=1, dropout=0.3, conv_channels=None, hidden_sizes=None):
         super(CNNBinaryClassifier, self).__init__()
-        self.layer1 = ResidualBlock(in_channels, 32)
-        self.layer2 = ResidualBlock(32, 64, downsample=True)
-        self.layer3 = ResidualBlock(64, 128, downsample=True)
+
+        if conv_channels is None or len(conv_channels) == 0:
+            conv_channels = [32, 64, 128]
+
+        self.conv_blocks = nn.ModuleList()
+        prev_channels = in_channels
+        for idx, out_channels in enumerate(conv_channels):
+            downsample = idx > 0
+            self.conv_blocks.append(ResidualBlock(prev_channels, out_channels, downsample=downsample))
+            prev_channels = out_channels
+
         self.global_pool = nn.AdaptiveAvgPool2d((1, 1))
         self.dropout = nn.Dropout(dropout)
-        self.fc = nn.Linear(128, 1)
+
+        if hidden_sizes is None:
+            hidden_sizes = []
+
+        fc_layers = []
+        prev_dim = prev_channels
+        for hidden_dim in hidden_sizes:
+            fc_layers.append(nn.Linear(prev_dim, hidden_dim))
+            fc_layers.append(nn.ReLU())
+            fc_layers.append(nn.Dropout(dropout))
+            prev_dim = hidden_dim
+        self.classical_head = nn.Sequential(*fc_layers)
+
+        self.fc = nn.Linear(prev_dim, 1)
 
     def forward(self, x):
-        x = self.layer1(x)
-        x = self.layer2(x)
-        x = self.layer3(x)
+        for block in self.conv_blocks:
+            x = block(x)
         x = self.global_pool(x)
         x = x.view(x.size(0), -1)
         x = self.dropout(x)
+        x = self.classical_head(x)
         x = torch.sigmoid(self.fc(x))
         return x
