@@ -10,7 +10,7 @@ model:
   grayscale: true   
 
 quantum:
-  n_qubits: 8
+  n_qubits: 4
   layers: 1
   backend: "lightning.qubit"
 
@@ -27,5 +27,4 @@ training:
 
 checkpoint:
   save_dir: "checkpoints"
-  subdir: "fashion_mnist_qcnn"
-
+  subdir: "fashion_mnist_hybrid_qcnn"

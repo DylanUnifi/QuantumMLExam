@@ -10,8 +10,8 @@ model:
   grayscale: false  
 
 quantum:
-  n_qubits: 8
-  layers: 1
+  n_qubits: 6
+  layers: 2
   backend: "lightning.qubit" 
 
 training:
@@ -19,7 +19,7 @@ training:
   epochs: 50
   learning_rate: 0.0001
   kfold: 3
-  early_stopping: 10
+  early_stopping: 15
   scheduler: "StepLR"
   scheduler_params:
     step_size: 10
@@ -27,4 +27,4 @@ training:
 
 checkpoint:
   save_dir: "checkpoints"
-  subdir: "svhn_qcnn"
+  subdir: "svhn_hybrid_qcnn"
