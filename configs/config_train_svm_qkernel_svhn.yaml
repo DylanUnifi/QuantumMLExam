@@ -1,0 +1,26 @@
+experiment_name: "svm_qkernel_svhn_exp"
+
+dataset:
+  name: svhn
+  binary_classes: [3, 8]
+  grayscale: false
+
+training:
+  batch_size: 256
+
+qkernel:
+  n_wires: 8
+  n_layers: 2
+  rotation: "Y"
+  device: "default.qubit"
+  gpu_device: "lightning.gpu"
+  use_gpu: true
+  use_pca: true
+  pca_components: 8
+  max_samples: 2000
+  C: 1.5
+  kernel_workers: 4
+
+checkpoint:
+  save_dir: "checkpoints"
+  subdir: "svhn_svm_qkernel"
