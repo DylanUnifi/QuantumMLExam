@@ -220,13 +220,13 @@ def run_train_quantum_mlp(config):
             bal_acc = balanced_accuracy_score(y_test_true, y_test_pred)
 
             print(
-                f"[Fold {fold}] Test Accuracy: {acc:.4f} | F1: {f1:.4f} | "
-                f"Balanced Accuracy: {bal_acc:.4f} | AUC: {auc:.4f} | Prec: {precision:.4f} | Rec: {recall:.4f}"
+                f"[Fold {fold}] Test Accuracy: {acc:.4f} | F1: {f1:.4f} | Precision: {precision:.4f} | "
+                f"Recall: {recall:.4f} | AUC: {auc:.4f} | Balanced Accuracy: {bal_acc:.4f}"
             )
             write_log(
                 log_file,
-                f"\n[Fold {fold}] Test Accuracy: {acc:.4f} | F1: {f1:.4f} | "
-                f"Balanced Accuracy: {bal_acc:.4f} | AUC: {auc:.4f} | Precision: {precision:.4f} | Recall: {recall:.4f}"
+                f"\n[Fold {fold}] Test Accuracy: {acc:.4f} | F1: {f1:.4f} | Precision: {precision:.4f} | "
+                f"Recall: {recall:.4f} | AUC: {auc:.4f} | Balanced Accuracy: {bal_acc:.4f}"
             )
 
             wandb.log({
