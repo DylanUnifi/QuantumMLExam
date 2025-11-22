@@ -13,6 +13,7 @@ quantum:
   n_qubits: 4
   layers: 1
   backend: "lightning.qubit"
+  use_gpu: true
 
 training:
   batch_size: 32
@@ -20,6 +21,10 @@ training:
   learning_rate: 0.0005
   kfold: 3
   early_stopping: 15
+  num_workers: 2
+  pin_memory: true
+  prefetch_factor: 2
+  persistent_workers: true
   scheduler: "StepLR"
   scheduler_params:
     step_size: 10
