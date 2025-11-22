@@ -26,12 +26,6 @@ def run_train_quantum_mlp(config):
     base_exp_name = config.get("experiment_name", "default_exp")
     EXPERIMENT_NAME = f"{dataset_name}_{base_exp_name}"
 
-    wandb.init(
-        project="qml_project",
-        name=EXPERIMENT_NAME,
-        config=config
-    )
-
     SAVE_DIR = os.path.join("engine/checkpoints", "quantum_mlp", EXPERIMENT_NAME)
     CHECKPOINT_DIR = os.path.join(SAVE_DIR, "folds")
     os.makedirs(CHECKPOINT_DIR, exist_ok=True)
@@ -43,6 +37,8 @@ def run_train_quantum_mlp(config):
     KFOLD = config["training"]["kfold"]
     PATIENCE = config["training"]["early_stopping"]
     SCHEDULER_TYPE = config.get("scheduler", None)
+    IN_CHANNELS = config['model']['in_channels']
+    
 
     dataset_cfg = config.get("dataset", {})
     train_dataset, test_dataset = load_dataset_by_name(
@@ -51,9 +47,6 @@ def run_train_quantum_mlp(config):
         binary_classes=dataset_cfg.get("binary_classes", [0, 1]),
         grayscale=dataset_cfg.get("grayscale", config.get("model", {}).get("grayscale"))
     )
-
-    indices = torch.randperm(len(train_dataset))[:500]
-    train_dataset = Subset(train_dataset, indices)
 
     print(f"Nombre d'exemples chargés dans train_dataset : {len(train_dataset)}")
 
@@ -269,11 +262,3 @@ def run_train_quantum_mlp(config):
             log_file.close()
 
     print("Quantum MLP training complete.")
-    wandb.finish()
-
-
-if __name__ == "__main__":
-    import yaml
-    with open("configs/config_train_quantum_mlp_fashion.yaml", "r") as f:
-        config = yaml.safe_load(f)
-    run_train_quantum_mlp(config)

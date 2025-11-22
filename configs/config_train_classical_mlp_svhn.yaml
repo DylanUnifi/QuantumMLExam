@@ -1,21 +1,22 @@
-experiment_name: "classical_cifar10_exp"
+experiment_name: "classical_svhn_exp"
 
 dataset:
-  name: "cifar10"
+  name: "svhn"
   binary_classes: [3, 8]
 
 model:
   in_channels: 3  
   hidden_sizes: [512, 256, 128, 64, 32]
+  grayscale: false
 
 training:
   batch_size: 128
-  epochs: 40
-  learning_rate: 0.001
+  epochs: 50
+  learning_rate: 0.0005
   kfold: 3
   early_stopping: 15
   scheduler: "none"
 
 checkpoint:
   save_dir: "checkpoints"
-  subdir: "cifar10_classical_mlp"
+  subdir: "svhn_classical_mlp"

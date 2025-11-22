@@ -4,6 +4,17 @@ dataset:
   name: "fashion_mnist"
   selected_classes: [3, 8]
 
+model: 
+  in_channels: 1  
+  hidden_sizes: [512, 256, 128, 64, 32]
+  grayscale: true 
+
+quantum:
+  n_qubits: 4
+  layers: 2
+  backend: "lightning.qubit"
+  use_gpu: true
+
 training:
   batch_size: 64
   epochs: 20                # Nombre d'époques pour l'entraînement du feature extractor
@@ -16,19 +27,9 @@ training:
   persistent_workers: true
   scheduler: "StepLR"          # Options: null, StepLR, MultiStepLR, CosineAnnealingLR
   scheduler_params:
-    step_size: 10              # Applicable à StepLR
-    gamma: 0.5                 # Facteur de réduction du LR
-
-model:
-  input_size: 784  # 28x28 flattened Fashion_MNIST
-  hidden_sizes: [256, 128, 64]  # optionel si tu veux les customiser
+    step_size: 10              
+    gamma: 0.5                 
 
 checkpoint:
   save_dir: "checkpoints"
   subdir: "fashion_mnist_quantum_mlp"
-
-quantum:
-  n_qubits: 4
-  layers: 2
-  backend: "lightning.qubit"
-  use_gpu: true
