@@ -49,10 +49,6 @@ def run_train_cnn(config):
         binary_classes=dataset_cfg.get("binary_classes", [3, 8]),
         grayscale=dataset_cfg.get("grayscale", config.get("model", {}).get("grayscale"))
     )
-
-    indices = torch.randperm(len(train_dataset))[:3000]
-    train_dataset = Subset(train_dataset, indices)
-
     print(f"Nombre d'exemples chargés dans train_dataset : {len(train_dataset)}")
 
     kfold = KFold(n_splits=KFOLD, shuffle=True, random_state=42)

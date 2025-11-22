@@ -100,7 +100,6 @@ def run_train_svm_qkernel(config):
     device_name = select_device_name(qkernel_cfg, n_wires)
     use_pca = qkernel_cfg.get("use_pca", True)
     pca_components = qkernel_cfg.get("pca_components", n_wires)
-    max_samples = qkernel_cfg.get("max_samples", 1500)
     C = qkernel_cfg.get("C", 1.0)
 
     log_path, log_file = init_logger(log_dir, "svm_qkernel")
@@ -115,9 +114,6 @@ def run_train_svm_qkernel(config):
         binary_classes=binary_classes,
         grayscale=grayscale,
     )
-
-    indices = torch.randperm(len(train_dataset))[:max_samples]
-    train_dataset = Subset(train_dataset, indices)
     print(f"Nombre d'exemples chargés dans train_dataset : {len(train_dataset)}")
 
     X_raw, y_raw = prepare_features(train_dataset, batch_size=batch_size)
