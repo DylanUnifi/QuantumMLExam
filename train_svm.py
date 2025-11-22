@@ -39,6 +39,7 @@ def objective(trial, X_train, y_train, X_val, y_val, log_file, objective_cfg):
         pca_model=objective_cfg.get("pca_model"),
         use_pca=objective_cfg.get("use_pca", False),
         auto_transform=True,
+        use_gpu=objective_cfg.get("use_gpu", False),
     )
     model.fit(X_train, y_train)
     metrics = model.evaluate(X_val, y_val)
@@ -71,6 +72,7 @@ def run_train_svm(config):
     pca_components = svm_cfg.get("pca_components", 50)
     optimize = svm_cfg.get("optimize", config.get("optuna", {}).get("optimize", False))
     n_trials = svm_cfg.get("n_trials", config.get("optuna", {}).get("n_trials", 30))
+    use_gpu = svm_cfg.get("use_gpu", False)
     kernel_options = svm_cfg.get("kernel_options", ["rbf", "poly", "sigmoid"])
     gamma_choices = svm_cfg.get("gamma_options", ["scale", "auto"])
     c_range = svm_cfg.get("C_range", [1e-2, 10.0])
@@ -81,7 +83,7 @@ def run_train_svm(config):
     max_samples = svm_cfg.get("max_samples", 3000)
 
     log_path, log_file = init_logger(LOG_DIR, "svm")
-    write_log(log_file, f"[SVM Training] Dataset: {dataset_name}, PCA: {use_pca} ({pca_components})\n")
+    write_log(log_file, f"[SVM Training] Dataset: {dataset_name}, PCA: {use_pca} ({pca_components}), GPU: {use_gpu}\n")
 
     train_dataset, test_dataset = load_dataset_by_name(
         name=dataset_name,
@@ -90,8 +92,8 @@ def run_train_svm(config):
         grayscale=grayscale,
     )
 
-    # indices = torch.randperm(len(train_dataset))[:max_samples]
-    # train_dataset = Subset(train_dataset, indices)
+    indices = torch.randperm(len(train_dataset))[:max_samples]
+    train_dataset = Subset(train_dataset, indices)
 
     print(f"Nombre d'exemples chargés dans train_dataset : {len(train_dataset)}")
 
@@ -137,6 +139,7 @@ def run_train_svm(config):
                     "scaler": scaler,
                     "pca_model": pca,
                     "use_pca": use_pca,
+                    "use_gpu": use_gpu,
                 },
             ),
             n_trials=n_trials,
@@ -152,6 +155,7 @@ def run_train_svm(config):
         save_path=SAVE_DIR,
         probability=True,
         auto_transform=True,
+        use_gpu=use_gpu,
     )
     final_model.fit(X_train_raw, y_train)
     final_model.save()

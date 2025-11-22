@@ -91,6 +91,7 @@ def run_train_quantum_mlp(config):
 
         model_hidden_sizes = config.get("model", {}).get("hidden_sizes", None)
         quantum_cfg = config.get("quantum", {})
+        use_gpu = quantum_cfg.get("use_gpu", False)
         model = QuantumResidualMLP(
             input_size=input_size,
             hidden_sizes=model_hidden_sizes,
@@ -98,6 +99,7 @@ def run_train_quantum_mlp(config):
             n_layers=quantum_cfg.get("layers", 2),
             backend=quantum_cfg.get("backend", "lightning.qubit"),
             shots=quantum_cfg.get("shots", None),
+            use_gpu=use_gpu,
         ).to(DEVICE)
         optimizer = optim.Adam(model.parameters(), lr=LR)
         scheduler = get_scheduler(optimizer, SCHEDULER_TYPE)

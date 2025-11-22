@@ -29,12 +29,19 @@ class ResidualMLPBlock(nn.Module):
         return F.relu(out)
 
 class QuantumLayer(nn.Module):
-    def __init__(self, n_qubits, n_layers, backend="lightning.qubit", shots=None):
+    def __init__(self, n_qubits, n_layers, backend="lightning.qubit", shots=None, use_gpu=False):
         super().__init__()
         self.n_qubits = n_qubits
         self.n_layers = n_layers
 
-        self.dev = qml.device(backend, wires=n_qubits, shots=shots)  # backend différentiable
+        device_kwargs = {"wires": n_qubits, "shots": shots}
+        selected_backend = backend
+        if use_gpu and torch.cuda.is_available():
+            if backend.startswith("lightning"):
+                selected_backend = "lightning.gpu"
+            device_kwargs["torch_device"] = "cuda"
+
+        self.dev = qml.device(selected_backend, **device_kwargs)  # backend différentiable
 
         @qml.qnode(self.dev, interface="torch")
         def circuit(inputs, weights):
@@ -68,6 +75,7 @@ class QuantumResidualMLP(nn.Module):
         dropout=0.3,
         backend="lightning.qubit",
         shots=None,
+        use_gpu=False,
     ):
         super().__init__()
         if hidden_sizes is None:
@@ -81,7 +89,13 @@ class QuantumResidualMLP(nn.Module):
         self.blocks = nn.ModuleList(blocks)
 
         self.dropout = nn.Dropout(dropout)
-        self.quantum = QuantumLayer(n_qubits=n_qubits, n_layers=n_layers, backend=backend, shots=shots)
+        self.quantum = QuantumLayer(
+            n_qubits=n_qubits,
+            n_layers=n_layers,
+            backend=backend,
+            shots=shots,
+            use_gpu=use_gpu,
+        )
         self.bn_q = nn.LayerNorm(n_qubits)  # stabilisation de la sortie quantique
         self.fc = nn.Linear(n_qubits, 1)
 

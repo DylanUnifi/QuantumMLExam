@@ -43,6 +43,7 @@ def run_train_hybrid_qcnn(config):
     Q_LAYERS = QUANTUM_CFG.get("layers", 1)
     Q_BACKEND = QUANTUM_CFG.get("backend", "lightning.qubit")
     Q_SHOTS = QUANTUM_CFG.get("shots", None)
+    Q_USE_GPU = QUANTUM_CFG.get("use_gpu", False)
 
     dataset_cfg = config.get("dataset", {})
     train_dataset, test_dataset = load_dataset_by_name(
@@ -91,6 +92,7 @@ def run_train_hybrid_qcnn(config):
             n_layers=Q_LAYERS,
             backend=Q_BACKEND,
             shots=Q_SHOTS,
+            use_gpu=Q_USE_GPU,
             conv_channels=MODEL_CONV_CHANNELS,
             hidden_sizes=MODEL_HIDDEN_SIZES,
         ).to(DEVICE)

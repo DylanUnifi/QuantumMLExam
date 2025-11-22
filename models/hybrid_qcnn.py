@@ -26,8 +26,22 @@ class ResidualBlock(nn.Module):
         out += identity
         return F.relu(out)
 
-def create_quantum_layer(n_qubits, n_layers=2, backend="lightning.qubit", shots=None):
-    dev = qml.device(backend, wires=n_qubits, shots=shots)  # backend différentiable
+def create_quantum_layer(
+    n_qubits,
+    n_layers=2,
+    backend="lightning.qubit",
+    shots=None,
+    use_gpu=False,
+):
+    device_kwargs = {"wires": n_qubits, "shots": shots}
+    selected_backend = backend
+
+    if use_gpu and torch.cuda.is_available():
+        if backend.startswith("lightning"):
+            selected_backend = "lightning.gpu"
+        device_kwargs["torch_device"] = "cuda"
+
+    dev = qml.device(selected_backend, **device_kwargs)  # backend différentiable
 
     @qml.qnode(dev, interface="torch")
     def qnode(inputs, weights):
@@ -55,6 +69,7 @@ class HybridQCNNBinaryClassifier(nn.Module):
         n_layers=1,
         backend="lightning.qubit",
         shots=None,
+        use_gpu=False,
         conv_channels=None,
         hidden_sizes=None,
     ):
@@ -87,7 +102,13 @@ class HybridQCNNBinaryClassifier(nn.Module):
         self.classical_head = nn.Sequential(*fc_layers)
 
         self.quantum_fc_input = nn.Linear(prev_dim, n_qubits)
-        self.quantum_layer = create_quantum_layer(n_qubits, n_layers, backend=backend, shots=shots)
+        self.quantum_layer = create_quantum_layer(
+            n_qubits,
+            n_layers,
+            backend=backend,
+            shots=shots,
+            use_gpu=use_gpu,
+        )
         self.bn_q = nn.LayerNorm(n_qubits)
         self.final_fc = nn.Linear(n_qubits, 1)
 

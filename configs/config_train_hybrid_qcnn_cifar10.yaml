@@ -13,6 +13,7 @@ quantum:
   n_qubits: 8
   layers: 3
   backend: "lightning.qubit"
+  use_gpu: true
 
 training:
   batch_size: 32

@@ -15,6 +15,7 @@ svm:
   default_C: 1.0
   default_kernel: "rbf"
   default_gamma: "scale"
+  use_gpu: true
 
 checkpoint:
   save_dir: "checkpoints"
