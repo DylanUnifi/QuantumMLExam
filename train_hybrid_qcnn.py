@@ -21,19 +21,12 @@ from utils.visual import save_plots
 from utils.logger import init_logger, write_log
 
 def run_train_hybrid_qcnn(config):
+
     dataset_name = config["dataset"]["name"]
     base_exp_name = config.get("experiment_name", "default_exp")
     EXPERIMENT_NAME = f"{dataset_name}_{base_exp_name}"
-
     SAVE_DIR = os.path.join("engine/checkpoints", "hybrid_qcnn", EXPERIMENT_NAME)
     CHECKPOINT_DIR = os.path.join(SAVE_DIR, "folds")
-    os.makedirs(CHECKPOINT_DIR, exist_ok=True)
-
-    wandb.init(
-        project="qml_project",
-        name=EXPERIMENT_NAME,
-        config=config
-    )
 
     DEVICE = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     BATCH_SIZE = config["training"]["batch_size"]
@@ -48,9 +41,6 @@ def run_train_hybrid_qcnn(config):
         batch_size=BATCH_SIZE,
         binary_classes=config.get("binary_classes", [3, 8])
     )
-
-    indices = torch.randperm(len(train_dataset))[:500]
-    train_dataset = Subset(train_dataset, indices)
 
     print(f"Nombre d'exemples chargés dans train_dataset : {len(train_dataset)}")
 
@@ -118,6 +108,8 @@ def run_train_hybrid_qcnn(config):
             writer.add_scalar("Loss/train", val_loss, epoch)
             writer.add_scalar("F1/val", f1, epoch)
             writer.add_scalar("Accuracy/val", acc, epoch)
+            writer.add_scalar("Precision/val", precision, epoch)
+            writer.add_scalar("Recall/val", recall, epoch)
             writer.add_scalar("BalancedAcc/val", bal_acc, epoch)
             writer.add_scalar("AUC/val", auc, epoch)
 
@@ -138,7 +130,7 @@ def run_train_hybrid_qcnn(config):
             loss_history.append(val_loss)
             f1_history.append(f1)
 
-            print(f"[Fold {fold}][Epoch {epoch}] Loss: {val_loss:.4f} | F1: {f1:.4f} | BalAcc: {bal_acc:.4f} | AUC: {auc:.4f}")
+            print(f"[Fold {fold}][Epoch {epoch}] Loss: {val_loss:.4f} | F1: {f1:.4f} | Acc: {acc:.4f}  | BalAcc: {bal_acc:.4f} | AUC: {auc:.4f}")
 
             if f1 > best_f1:
                 best_f1, best_epoch = f1, epoch
@@ -155,9 +147,6 @@ def run_train_hybrid_qcnn(config):
 
             if scheduler:
                 scheduler.step()
-
-        wandb.run.summary[f"fold_{fold}/best_f1"] = best_f1
-        wandb.run.summary[f"fold_{fold}/best_epoch"] = best_epoch
 
         save_plots(fold, loss_history, f1_history, os.path.join(SAVE_DIR, "plots"))
         writer.close()
@@ -189,22 +178,21 @@ def run_train_hybrid_qcnn(config):
             try:
                 auc = roc_auc_score(y_test_true, y_test_probs)
             except ValueError:
-                auc = 0.0
+                auc = float('nan')
             bal_acc = balanced_accuracy_score(y_test_true, y_test_pred)
 
-            print(f"[Fold {fold}] Test Accuracy: {acc:.4f} | F1: {f1:.4f} | BalAcc: {bal_acc:.4f} | AUC: {auc:.4f} | Prec: {precision:.4f} | Rec: {recall:.4f}")
-            write_log(log_file, f"\n[Fold {fold}] Test Accuracy: {acc:.4f} | F1: {f1:.4f} | BalAcc: {bal_acc:.4f} | AUC: {auc:.4f} | Prec: {precision:.4f} | Rec: {recall:.4f}")
+            print(f"[Fold {fold}] Test Accuracy: {acc:.4f} | F1: {f1:.4f} | Precision: {precision:.4f} | Recall: {recall:.4f} | AUC: {auc:.4f} | Balanced Acc: {bal_acc:.4f}")
+            write_log(log_file, f"\n[Fold {fold}] Test Accuracy: {acc:.4f} | F1: {f1:.4f} | Precision: {precision:.4f} | Recall: {recall:.4f} | AUC: {auc:.4f} | Balanced Acc: {bal_acc:.4f}")
 
             wandb.log({
                 f"test/f1": f1,
                 f"test/accuracy": acc,
                 f"test/precision": precision,
                 f"test/recall": recall,
-                f"test/balanced_accuracy": bal_acc,
                 f"test/auc": auc,
+                f"test/balanced_accuracy": bal_acc,
             })
 
             log_file.close()
 
     print("Hybrid QCNN training and evaluation complete.")
-    wandb.finish()

@@ -29,21 +29,21 @@ class ResidualMLPBlock(nn.Module):
         return F.relu(out)
 
 def create_quantum_layer(n_qubits, n_layers=2):
-    dev = qml.device("lightning.qubit", wires=n_qubits, shots=None)  # 🔥 backend différentiable
+    dev = qml.device("lightning.qubit", wires=n_qubits, shots=None)  # backend différentiable
 
     @qml.qnode(dev, interface="torch")
     def qnode(inputs, weights):
         inputs = inputs.flatten()
         for i in range(n_qubits):
             qml.RY(inputs[i], wires=i)
-            qml.RZ(inputs[i], wires=i)  # 🔥 double rotation pour enrichir l’encoding
+            qml.RZ(inputs[i], wires=i)  # double rotation pour enrichir l’encoding
         qml.templates.BasicEntanglerLayers(weights, wires=range(n_qubits))
         return [qml.expval(qml.PauliZ(i)) for i in range(n_qubits)]
 
     weight_shapes = {"weights": (n_layers, n_qubits)}
     layer = qml.qnn.TorchLayer(qnode, weight_shapes)
 
-    # 🔥 initialisation aléatoire des poids quantiques
+    # initialisation aléatoire des poids quantiques
     for name, param in layer.named_parameters():
         if "weights" in name:
             nn.init.normal_(param, mean=0.0, std=0.01)
@@ -67,7 +67,7 @@ class HybridQCNNBinaryClassifier(nn.Module):
         x = self.block2(x)
         x = self.block3(x)
         x = self.dropout(x)
-        x = torch.tanh(self.quantum_fc_input(x)) * np.pi  # 🔥 mapping [-π, π]
+        x = torch.tanh(self.quantum_fc_input(x)) * np.pi  # mapping [-π, π]
 
         outputs = []
         for sample in x:
@@ -93,4 +93,4 @@ class HybridQCNNFeatures(nn.Module):
         x = self.block2(x)
         x = self.block3(x)
         x = self.dropout(x)
-        return torch.tanh(self.quantum_fc_input(x)) * np.pi  # 🔥 mapping enrichi
+        return torch.tanh(self.quantum_fc_input(x)) * np.pi  # mapping enrichi

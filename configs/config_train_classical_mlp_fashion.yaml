@@ -1,4 +1,4 @@
-experiment_name: "classical_fashion_exp"
+experiment_name: "classical_mlp_exp"
 
 dataset:
   name: "fashion_mnist"             # Options: fashion_mnist, cifar10, svhn
@@ -7,18 +7,16 @@ dataset:
 
 model:
   input_size: 784                   # 28x28 images aplaties
-  hidden_sizes: [128, 64, 32]
+  hidden_sizes: [512, 256, 128, 64, 32]
 
 training:
-  batch_size: 64
+  batch_size: 128
   epochs: 20
   learning_rate: 0.001
   kfold: 3
-  scheduler: "StepLR" # Options: step, cosine, none
+  scheduler: "none" # Options: step, cosine, none
   early_stopping: 10                # Patience in epochs
 
 checkpoint:
   save_dir: "checkpoints"
   subdir: "fashion_mnist_classical_mlp"
-
-seed: 42

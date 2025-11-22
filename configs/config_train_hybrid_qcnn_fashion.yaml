@@ -1,8 +1,18 @@
-experiment_name: "qcnn_fashion_exp"
+experiment_name: "hybrid_qcnn_exp"
 
 dataset:
-  name: fashion_mnist
+  name: "fashion_mnist"
   binary_classes: [3, 8]
+             
+model: 
+  in_channels: 1  
+  hidden_sizes: [512, 256, 128, 64, 32]
+  grayscale: true   
+
+quantum:
+  n_qubits: 8
+  layers: 1
+  backend: "lightning.qubit"
 
 training:
   batch_size: 64
@@ -13,19 +23,9 @@ training:
   scheduler: "StepLR"          
   scheduler_params:
     step_size: 10              
-    gamma: 0.5                 
-
-model:
-  input_size: 784  
-  in_channels: 1  
-  hidden_sizes: [128, 64, 32]
-  grayscale: true   
+    gamma: 0.5  
 
 checkpoint:
   save_dir: "checkpoints"
   subdir: "fashion_mnist_qcnn"
 
-quantum:
-  n_qubits: 4
-  layers: 2
-  backend: "lightning.qubit"

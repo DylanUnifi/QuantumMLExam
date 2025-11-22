@@ -51,15 +51,20 @@ def main():
     print(f"[INFO] Starting training for model: {args.model.upper()}")
     print(f"[INFO] Hyperparameter optimization: {'ENABLED' if args.optimize else 'DISABLED'}")
 
-    # 🔥 Initialise wandb
+    dataset_name = config["dataset"]["name"]
+    base_exp_name = config.get("experiment_name", "default_exp")
+    EXPERIMENT_NAME = f"{dataset_name}_{base_exp_name}"
+    SAVE_DIR = os.path.join("engine/checkpoints", "classical", EXPERIMENT_NAME)
+    CHECKPOINT_DIR = os.path.join(SAVE_DIR, "folds")
+    os.makedirs(CHECKPOINT_DIR, exist_ok=True)
+
     wandb.init(
         project=args.project,
-        name=f"{args.model}_{wandb.util.generate_id()}",
+        name=f"{args.model}_{wandb.util.generate_id()}_{EXPERIMENT_NAME}",
         config=config,
         tags=[config["dataset"]["name"], args.model]
     )
 
-    # ➤ Lancement du bon script en fonction du modèle choisi
     if args.model == "classical_mlp":
         run_train_classical_mlp(config)
         wandb.finish()
@@ -84,7 +89,7 @@ def main():
         raise ValueError(f"Unsupported model: {args.model}")
 
     print(f"[INFO] Training for {args.model.upper()} completed successfully.")
-    wandb.finish()  # ✅ Clôturer le run proprement
+    wandb.finish()
 
 
 if __name__ == "__main__":

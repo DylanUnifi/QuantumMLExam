@@ -4,19 +4,18 @@ dataset:
   name: "cifar10"
   binary_classes: [3, 8]
 
+model:
+  in_channels: 3  
+  hidden_sizes: [512, 256, 128, 64, 32]
+
 training:
-  batch_size: 64
+  batch_size: 128
   epochs: 40
   learning_rate: 0.001
   kfold: 3
   early_stopping: 15
-  scheduler: "StepLR"
-  scheduler_params:
-    step_size: 10
-    gamma: 0.5
+  scheduler: "none"
 
-model:
-  in_channels: 3  # CIFAR-10 images sont RGB, donc 3 canaux ; mets 1 pour MNIST/Fashion-MNIST
-  hidden_sizes: [128, 64, 32]
-
-seed: 42
+checkpoint:
+  save_dir: "checkpoints"
+  subdir: "cifar10_classical_mlp"
