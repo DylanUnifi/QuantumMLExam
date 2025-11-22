@@ -19,13 +19,30 @@ Datasets download automatically via `torchvision.datasets` during training.
 - **Training infrastructure**: YAML-driven configs, k-fold support, TensorBoard and Weights & Biases logging, checkpointing under `engine/checkpoints/`.
 
 ## 🚀 How to Run
-Clone and set up the environment (conda example):
+Clone and set up the environment:
 ```bash
 git clone https://github.com/DylanUnifi/QuantumMLExam.git
 cd QuantumMLExam
-conda env create -f environment.yml
-conda activate qml_project
+python -m venv .venv
+source .venv/bin/activate
+pip install --upgrade pip
+pip install -r requirements.txt
 ```
+
+### Docker (CPU by default)
+Build and run the project without installing dependencies locally:
+```bash
+docker build -t quantum-ml-exam .
+
+# Inspect available options
+docker run --rm quantum-ml-exam
+
+# Example: train the hybrid QCNN on Fashion-MNIST with outputs persisted locally
+docker run --rm -v $(pwd)/outputs:/app/outputs quantum-ml-exam \
+  python main.py --model hybrid_qcnn --config configs/config_train_hybrid_qcnn_fashion.yaml
+```
+
+GPU acceleration for quantum layers or cuML-based SVMs requires a CUDA-enabled base image and the NVIDIA Container Toolkit. Rebuild with an appropriate PyTorch CUDA image and install `pennylane-lightning[gpu]`/`cupy`/`cuml` inside the Dockerfile, then launch with `--gpus all`.
 
 ### Unified entrypoint
 Use `main.py` to launch any model with its config:
