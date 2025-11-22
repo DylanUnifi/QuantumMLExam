@@ -4,9 +4,19 @@ dataset:
   name: "cifar10"
   binary_classes: [3, 8]
 
+model: 
+  in_channels: 3  
+  hidden_sizes: [512, 256, 128, 64, 32]
+  grayscale: false  
+
+quantum:
+  n_qubits: 8
+  layers: 3
+  backend: "lightning.qubit"
+
 training:
   batch_size: 32
-  epochs: 100
+  epochs: 50
   learning_rate: 0.0005
   kfold: 3
   early_stopping: 15
@@ -14,8 +24,7 @@ training:
   scheduler_params:
     step_size: 10
     gamma: 0.5
-
-quantum:
-  n_qubits: 4
-  layers: 2
-  backend: "lightning.qubit"
+    
+checkpoint:
+  save_dir: "checkpoints"
+  subdir: "cifar10_quantum_mlp"

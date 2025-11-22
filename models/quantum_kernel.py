@@ -1,5 +1,4 @@
 # models/quantum_kernel.py
-# Version: 3.0 – Optimisé (vitesse, qualité du noyau, visualisation)
 
 import pennylane as qml
 import numpy as np

@@ -43,6 +43,8 @@ def run_train_quantum_mlp(config):
     KFOLD = config["training"]["kfold"]
     PATIENCE = config["training"]["early_stopping"]
     SCHEDULER_TYPE = config.get("scheduler", None)
+    IN_CHANNELS = config['model']['in_channels']
+    
 
     dataset_cfg = config.get("dataset", {})
     train_dataset, test_dataset = load_dataset_by_name(
@@ -51,9 +53,6 @@ def run_train_quantum_mlp(config):
         binary_classes=dataset_cfg.get("binary_classes", [0, 1]),
         grayscale=dataset_cfg.get("grayscale", config.get("model", {}).get("grayscale"))
     )
-
-    indices = torch.randperm(len(train_dataset))[:500]
-    train_dataset = Subset(train_dataset, indices)
 
     print(f"Nombre d'exemples chargés dans train_dataset : {len(train_dataset)}")
 
@@ -227,13 +226,13 @@ def run_train_quantum_mlp(config):
             bal_acc = balanced_accuracy_score(y_test_true, y_test_pred)
 
             print(
-                f"[Fold {fold}] Test Accuracy: {acc:.4f} | F1: {f1:.4f} | Precision: {precision:.4f} | "
-                f"Recall: {recall:.4f} | AUC: {auc:.4f} | Balanced Accuracy: {bal_acc:.4f}"
+                f"[Fold {fold}] Test Accuracy: {acc:.4f} | F1: {f1:.4f} | "
+                f"Balanced Accuracy: {bal_acc:.4f} | AUC: {auc:.4f} | Prec: {precision:.4f} | Rec: {recall:.4f}"
             )
             write_log(
                 log_file,
-                f"\n[Fold {fold}] Test Accuracy: {acc:.4f} | F1: {f1:.4f} | Precision: {precision:.4f} | "
-                f"Recall: {recall:.4f} | AUC: {auc:.4f} | Balanced Accuracy: {bal_acc:.4f}"
+                f"\n[Fold {fold}] Test Accuracy: {acc:.4f} | F1: {f1:.4f} | "
+                f"Balanced Accuracy: {bal_acc:.4f} | AUC: {auc:.4f} | Precision: {precision:.4f} | Recall: {recall:.4f}"
             )
 
             wandb.log({

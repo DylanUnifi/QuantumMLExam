@@ -4,10 +4,6 @@ dataset:
   name: cifar10
   binary_classes: [3, 8]
 
-training:
-  epochs: 1  # Dummy value
-  batch_size: 256
-
 svm:
   use_pca: false
   pca_components: 50
@@ -19,3 +15,7 @@ svm:
   default_C: 1.0
   default_kernel: "rbf"
   default_gamma: "scale"
+
+checkpoint:
+  save_dir: "checkpoints"
+  subdir: "cifar10_svm"
