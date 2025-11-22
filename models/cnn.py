@@ -1,5 +1,4 @@
 # models/cnn.py
-# Version: 2.0
 
 import torch
 import torch.nn as nn
@@ -29,13 +28,13 @@ class ResidualBlock(nn.Module):
 
 
 class CNNBinaryClassifier(nn.Module):
-    def __init__(self, in_channels=1):
+    def __init__(self, in_channels=1, dropout=0.3):
         super(CNNBinaryClassifier, self).__init__()
         self.layer1 = ResidualBlock(in_channels, 32)
         self.layer2 = ResidualBlock(32, 64, downsample=True)
         self.layer3 = ResidualBlock(64, 128, downsample=True)
         self.global_pool = nn.AdaptiveAvgPool2d((1, 1))
-        self.dropout = nn.Dropout(0.3)
+        self.dropout = nn.Dropout(dropout)
         self.fc = nn.Linear(128, 1)
 
     def forward(self, x):

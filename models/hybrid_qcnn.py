@@ -4,27 +4,25 @@ import torch.nn.functional as F
 import pennylane as qml
 import numpy as np
 
-class ResidualMLPBlock(nn.Module):
-    def __init__(self, in_features, out_features, downsample=False, dropout=0.3):
-        super().__init__()
-        self.downsample = None
-        self.fc1 = nn.Linear(in_features, out_features)
-        self.ln1 = nn.LayerNorm(out_features)
-        self.fc2 = nn.Linear(out_features, out_features)
-        self.ln2 = nn.LayerNorm(out_features)
-        self.dropout = nn.Dropout(dropout)
-
-        if downsample or in_features != out_features:
+class ResidualBlock(nn.Module):
+    def __init__(self, in_channels, out_channels, downsample=False):
+        super(ResidualBlock, self).__init__()
+        stride = 2 if downsample else 1
+        self.conv1 = nn.Conv2d(in_channels, out_channels, kernel_size=3, padding=1, stride=stride)
+        self.bn1 = nn.BatchNorm2d(out_channels)
+        self.conv2 = nn.Conv2d(out_channels, out_channels, kernel_size=3, padding=1)
+        self.bn2 = nn.BatchNorm2d(out_channels)
+        self.downsample = nn.Sequential()
+        if downsample or in_channels != out_channels:
             self.downsample = nn.Sequential(
-                nn.Linear(in_features, out_features),
-                nn.LayerNorm(out_features)
+                nn.Conv2d(in_channels, out_channels, kernel_size=1, stride=stride),
+                nn.BatchNorm2d(out_channels)
             )
 
     def forward(self, x):
-        identity = x if self.downsample is None else self.downsample(x)
-        out = F.relu(self.ln1(self.fc1(x)))
-        out = self.dropout(out)
-        out = self.ln2(self.fc2(out))
+        identity = self.downsample(x)
+        out = F.relu(self.bn1(self.conv1(x)))
+        out = self.bn2(self.conv2(out))
         out += identity
         return F.relu(out)
 
@@ -51,21 +49,24 @@ def create_quantum_layer(n_qubits, n_layers=2):
     return layer
 
 class HybridQCNNBinaryClassifier(nn.Module):
-    def __init__(self, input_size, hidden_sizes=[32, 16, 8], n_qubits=4, n_layers=2, dropout=0.3):
+    def __init__(self, input_channel = 1, dropout=0.3, n_qubits=4, n_layers=1):
         super().__init__()
-        self.block1 = ResidualMLPBlock(input_size, hidden_sizes[0], downsample=True, dropout=dropout)
-        self.block2 = ResidualMLPBlock(hidden_sizes[0], hidden_sizes[1], downsample=True, dropout=dropout)
-        self.block3 = ResidualMLPBlock(hidden_sizes[1], hidden_sizes[2], downsample=True, dropout=dropout)
+        self.layer1 = ResidualBlock(input_channel, 32)
+        self.layer2 = ResidualBlock(32, 64, downsample=True)
+        self.layer3 = ResidualBlock(64, 128, downsample=True)
+        self.global_pool = nn.AdaptiveAvgPool2d((1, 1))
         self.dropout = nn.Dropout(dropout)
-        self.quantum_fc_input = nn.Linear(hidden_sizes[2], n_qubits)
+        self.quantum_fc_input = nn.Linear(128, n_qubits)
         self.quantum_layer = create_quantum_layer(n_qubits, n_layers)
         self.bn_q = nn.LayerNorm(n_qubits)
         self.final_fc = nn.Linear(n_qubits, 1)
 
     def forward(self, x):
-        x = self.block1(x)
-        x = self.block2(x)
-        x = self.block3(x)
+        x = self.layer1(x)
+        x = self.layer2(x)
+        x = self.layer3(x)
+        x = self.global_pool(x)
+        x = x.view(x.size(0), -1)
         x = self.dropout(x)
         x = torch.tanh(self.quantum_fc_input(x)) * np.pi  # mapping [-π, π]
 
@@ -78,19 +79,3 @@ class HybridQCNNBinaryClassifier(nn.Module):
         x = self.bn_q(x)
         x = self.final_fc(x)
         return torch.sigmoid(x)
-
-class HybridQCNNFeatures(nn.Module):
-    def __init__(self, input_size, hidden_sizes=[32, 16, 8], n_qubits=4, n_layers=2, dropout=0.3):
-        super().__init__()
-        self.block1 = ResidualMLPBlock(input_size, hidden_sizes[0], downsample=True, dropout=dropout)
-        self.block2 = ResidualMLPBlock(hidden_sizes[0], hidden_sizes[1], downsample=True, dropout=dropout)
-        self.block3 = ResidualMLPBlock(hidden_sizes[1], hidden_sizes[2], downsample=True, dropout=dropout)
-        self.dropout = nn.Dropout(dropout)
-        self.quantum_fc_input = nn.Linear(hidden_sizes[2], n_qubits)
-
-    def forward(self, x):
-        x = self.block1(x)
-        x = self.block2(x)
-        x = self.block3(x)
-        x = self.dropout(x)
-        return torch.tanh(self.quantum_fc_input(x)) * np.pi  # mapping enrichi

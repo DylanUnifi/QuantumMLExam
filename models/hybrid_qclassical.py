@@ -59,7 +59,6 @@ class QuantumLayer(nn.Module):
             x = x.unsqueeze(0)
         x = torch.tanh(x[:, :self.n_qubits]) * np.pi
 
-        # ⚠️ Correction : traiter chaque sample indépendamment
         outputs = []
         for sample in x:
             q_out = self.qnn(sample.unsqueeze(0))  # shape [1, n_qubits]
