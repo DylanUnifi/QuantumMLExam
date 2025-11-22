@@ -20,6 +20,10 @@ training:
   learning_rate: 0.0001
   kfold: 3
   early_stopping: 15
+  num_workers: 2
+  pin_memory: true
+  prefetch_factor: 2
+  persistent_workers: true
   scheduler: "StepLR"
   scheduler_params:
     step_size: 10

@@ -17,12 +17,16 @@ quantum:
 training:
   batch_size: 64
   epochs: 20                
-  learning_rate: 0.0005      
-  kfold: 3                   
-  early_stopping: 10          
-  scheduler: "StepLR"          
+  learning_rate: 0.0005
+  kfold: 3
+  early_stopping: 10
+  num_workers: 2
+  pin_memory: true
+  prefetch_factor: 2
+  persistent_workers: true
+  scheduler: "StepLR"
   scheduler_params:
-    step_size: 10              
+    step_size: 10
     gamma: 0.5  
 
 checkpoint:

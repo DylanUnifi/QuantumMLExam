@@ -56,6 +56,24 @@ def run_train_hybrid_qcnn(config):
 
     kfold = KFold(n_splits=KFOLD, shuffle=True, random_state=42)
 
+    def build_loader(dataset, shuffle=False):
+        training_cfg = config.get("training", {})
+        num_workers = training_cfg.get("num_workers", 0)
+        pin_memory = training_cfg.get("pin_memory", False)
+        prefetch_factor = training_cfg.get("prefetch_factor", None)
+        persistent_workers = training_cfg.get("persistent_workers", False) if num_workers > 0 else False
+
+        loader_kwargs = {
+            "batch_size": BATCH_SIZE,
+            "shuffle": shuffle,
+            "num_workers": num_workers,
+            "pin_memory": pin_memory,
+            "persistent_workers": persistent_workers,
+        }
+        if prefetch_factor is not None and num_workers > 0:
+            loader_kwargs["prefetch_factor"] = prefetch_factor
+        return DataLoader(dataset, **loader_kwargs)
+
     for fold, (train_idx, val_idx) in enumerate(kfold.split(train_dataset)):
         print(f"[Fold {fold}] Starting Hybrid QCNN training...")
 
@@ -64,8 +82,8 @@ def run_train_hybrid_qcnn(config):
         log_path, log_file = init_logger(os.path.join(SAVE_DIR, "logs"), fold)
         write_log(log_file, f"[Fold {fold}] Hybrid QCNN Training Log\n")
 
-        train_loader = DataLoader(Subset(train_dataset, train_idx), batch_size=BATCH_SIZE, shuffle=True)
-        val_loader = DataLoader(Subset(train_dataset, val_idx), batch_size=BATCH_SIZE)
+        train_loader = build_loader(Subset(train_dataset, train_idx), shuffle=True)
+        val_loader = build_loader(Subset(train_dataset, val_idx))
 
         model = HybridQCNNBinaryClassifier(
             input_channel=IN_CHANNELS,
@@ -186,7 +204,7 @@ def run_train_hybrid_qcnn(config):
 
             model.eval()
             y_test_true, y_test_pred, y_test_probs = [], [], []
-            test_loader = DataLoader(test_dataset, batch_size=BATCH_SIZE)
+            test_loader = build_loader(test_dataset)
             with torch.no_grad():
                 for batch_X, batch_y in test_loader:
                     batch_X = batch_X.to(DEVICE)

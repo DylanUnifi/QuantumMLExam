@@ -52,6 +52,25 @@ def run_train_quantum_mlp(config):
 
     kfold = KFold(n_splits=KFOLD, shuffle=True, random_state=42)
 
+    def build_loader(dataset, shuffle=False, drop_last=False):
+        training_cfg = config.get("training", {})
+        num_workers = training_cfg.get("num_workers", 0)
+        pin_memory = training_cfg.get("pin_memory", False)
+        prefetch_factor = training_cfg.get("prefetch_factor", None)
+        persistent_workers = training_cfg.get("persistent_workers", False) if num_workers > 0 else False
+
+        loader_kwargs = {
+            "batch_size": BATCH_SIZE,
+            "shuffle": shuffle,
+            "drop_last": drop_last,
+            "num_workers": num_workers,
+            "pin_memory": pin_memory,
+            "persistent_workers": persistent_workers,
+        }
+        if prefetch_factor is not None and num_workers > 0:
+            loader_kwargs["prefetch_factor"] = prefetch_factor
+        return DataLoader(dataset, **loader_kwargs)
+
     for fold, (train_idx, val_idx) in enumerate(kfold.split(train_dataset)):
         print(f"[Fold {fold}] Starting Quantum MLP training...")
 
@@ -64,8 +83,8 @@ def run_train_quantum_mlp(config):
         train_subset = Subset(train_dataset, train_idx)
         val_subset = Subset(train_dataset, val_idx)
 
-        train_loader = DataLoader(train_subset, batch_size=BATCH_SIZE, shuffle=True, drop_last=True)
-        val_loader = DataLoader(val_subset, batch_size=BATCH_SIZE, drop_last=False)
+        train_loader = build_loader(train_subset, shuffle=True, drop_last=True)
+        val_loader = build_loader(val_subset)
 
         sample_X, _ = train_dataset[0]
         input_size = sample_X.numel()
@@ -201,7 +220,7 @@ def run_train_quantum_mlp(config):
             model.eval()
             y_test_true, y_test_pred, y_test_probs = [], [], []
 
-            test_loader = DataLoader(test_dataset, batch_size=BATCH_SIZE, drop_last=False)
+            test_loader = build_loader(test_dataset)
             with torch.no_grad():
                 for batch_X, batch_y in test_loader:
                     batch_X, batch_y = batch_X.view(batch_X.size(0), -1).to(DEVICE), batch_y.to(DEVICE)

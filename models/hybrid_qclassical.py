@@ -38,10 +38,8 @@ class QuantumLayer(nn.Module):
 
         @qml.qnode(self.dev, interface="torch")
         def circuit(inputs, weights):
-            inputs = inputs.flatten()
-            for i in range(n_qubits):
-                qml.RY(inputs[i], wires=i)
-                qml.RZ(inputs[i], wires=i)
+            qml.templates.AngleEmbedding(inputs, wires=range(n_qubits), rotation="RY")
+            qml.templates.AngleEmbedding(inputs, wires=range(n_qubits), rotation="RZ")
             qml.templates.BasicEntanglerLayers(weights, wires=range(n_qubits))
             return [qml.expval(qml.PauliZ(i)) for i in range(n_qubits)]
 
@@ -58,12 +56,7 @@ class QuantumLayer(nn.Module):
         if x.dim() == 1:
             x = x.unsqueeze(0)
         x = torch.tanh(x[:, :self.n_qubits]) * np.pi
-
-        outputs = []
-        for sample in x:
-            q_out = self.qnn(sample.unsqueeze(0))  # shape [1, n_qubits]
-            outputs.append(q_out)
-        return torch.cat(outputs, dim=0)  # shape [batch_size, n_qubits]
+        return self.qnn(x)
 
 class QuantumResidualMLP(nn.Module):
     def __init__(

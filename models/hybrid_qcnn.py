@@ -31,10 +31,8 @@ def create_quantum_layer(n_qubits, n_layers=2, backend="lightning.qubit", shots=
 
     @qml.qnode(dev, interface="torch")
     def qnode(inputs, weights):
-        inputs = inputs.flatten()
-        for i in range(n_qubits):
-            qml.RY(inputs[i], wires=i)
-            qml.RZ(inputs[i], wires=i)  # double rotation pour enrichir l’encoding
+        qml.templates.AngleEmbedding(inputs, wires=range(n_qubits), rotation="RY")
+        qml.templates.AngleEmbedding(inputs, wires=range(n_qubits), rotation="RZ")
         qml.templates.BasicEntanglerLayers(weights, wires=range(n_qubits))
         return [qml.expval(qml.PauliZ(i)) for i in range(n_qubits)]
 
@@ -111,13 +109,7 @@ class HybridQCNNBinaryClassifier(nn.Module):
         x = self.dropout(x)
         x = self.classical_head(x)
         x = torch.tanh(self.quantum_fc_input(x)) * np.pi  # mapping [-π, π]
-
-        outputs = []
-        for sample in x:
-            q_out = self.quantum_layer(sample.unsqueeze(0))
-            outputs.append(q_out)
-        x = torch.cat(outputs, dim=0)
-
+        x = self.quantum_layer(x)
         x = self.bn_q(x)
         x = self.final_fc(x)
         return torch.sigmoid(x)
