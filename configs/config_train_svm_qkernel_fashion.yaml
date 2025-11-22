@@ -17,7 +17,7 @@ qkernel:
   use_gpu: true
   use_pca: true
   pca_components: 6
-  max_samples: 2000
+  max_samples: 500
   C: 2.0
   kernel_workers: 4
 
