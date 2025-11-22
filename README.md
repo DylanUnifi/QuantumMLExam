@@ -51,6 +51,19 @@ Each YAML controls dataset settings (grayscale vs RGB, class subset), model hype
 
 GPU images rely on the `pytorch/pytorch:2.3.1-cuda12.1-cudnn8-runtime` base with CUDA wheels (`TORCH_SPEC`/`TORCH_INDEX_URL` build args). Customize these args in `docker-compose.yml` or via the command line to target different CUDA versions.
 
+### Batch runs across datasets
+Use the dataset launch helper to start Fashion-MNIST, CIFAR-10, and SVHN pipelines together. The script prefers tmux for parallel sessions and falls back to sequential execution if tmux is unavailable. You can force GPU selection per dataset and optionally activate a conda environment inside each session:
+
+```bash
+# optional: choose GPUs per dataset (defaults are 0)
+GPU_FASHION=0 GPU_CIFAR10=1 GPU_SVHN=2 \
+  # optional: activate a conda env in each tmux pane or sequential run
+  CONDA_ENV=qml-env \
+  bash launch_all_datasets.sh
+```
+
+If tmux is missing, the same environment activation prefix is reused for sequential runs, and a warning is printed.
+
 ### Unified entrypoint
 Use `main.py` to launch any model with its config:
 ```bash
@@ -62,6 +75,8 @@ python main.py --model svm --config configs/config_train_svm_fashion.yaml --opti
 python main.py --model svm_qkernel --config configs/config_train_svm_qkernel_svhn.yaml
 ```
 Each YAML controls dataset settings (grayscale vs RGB, class subset), model hyperparameters (channels/hidden sizes, quantum qubits/layers, backend, shots), training knobs (epochs, early stopping), and data-loader performance flags (workers, pin memory, prefetch).
+
+Quantum backends support GPU acceleration with automatic fallbacks: set `use_gpu: true` in the `quantum` (hybrid QCNN/quantum MLP) or `qkernel` (quantum SVM) sections to request `lightning.gpu`, and the code will drop to the CPU-accelerated `lightning.kokkos` device when CUDA is unavailable. SVM configs expose `use_gpu` for cuML-backed acceleration where available.
 
 ### Direct script invocation
 Individual trainers remain available, e.g.:
