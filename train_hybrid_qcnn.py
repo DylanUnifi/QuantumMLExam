@@ -35,6 +35,7 @@ def run_train_hybrid_qcnn(config):
     KFOLD = config["training"]["kfold"]
     PATIENCE = config["training"]["early_stopping"]
     SCHEDULER_TYPE = config.get("scheduler", None)
+    IN_CHANNELS = config['model']['in_channels']
 
     train_dataset, test_dataset = load_dataset_by_name(
         name=dataset_name,
@@ -58,7 +59,7 @@ def run_train_hybrid_qcnn(config):
         val_loader = DataLoader(Subset(train_dataset, val_idx), batch_size=BATCH_SIZE)
 
         input_size = train_dataset[0][0].numel()
-        model = HybridQCNNBinaryClassifier(input_size=input_size).to(DEVICE)
+        model = HybridQCNNBinaryClassifier(input_channel=IN_CHANNELS).to(DEVICE)
         optimizer = optim.Adam(model.parameters(), lr=LR)
         scheduler = get_scheduler(optimizer, SCHEDULER_TYPE)
         criterion = nn.BCELoss()
