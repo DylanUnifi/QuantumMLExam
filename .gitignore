@@ -1,0 +1,110 @@
+# Byte-compiled / optimized / DLL files
+__pycache__/
+*.py[cod]
+*$py.class
+
+# C extensions
+*.so
+
+# Distribution / packaging
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+share/python-wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+MANIFEST
+
+# Virtual environments
+.env
+.venv
+env/
+venv/
+ENV/
+env.bak/
+venv.bak/
+.python-version
+
+# PyInstaller
+*.manifest
+*.spec
+
+# Unit test / coverage reports
+htmlcov/
+.tox/
+.nox/
+.coverage
+.coverage.*
+.cache
+.pytest_cache/
+cover/
+coverage.xml
+*.cover
+*.py,cover
+*.gcno
+*.gcda
+
+# Logs
+*.log
+logs/
+*.out
+
+# IDEs and editors
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# Jupyter Notebooks
+.ipynb_checkpoints/
+
+# Type checker and analysis
+.mypy_cache/
+.dmypy.json
+dmypy.json
+.pyre/
+.pytype/
+
+# Training artifacts and datasets
+data/
+outputs/
+checkpoints/
+runs/
+artifacts/
+wandb/
+lightning_logs/
+tensorboard/
+mlruns/
+events.out.tfevents*
+*.ckpt
+*.pth
+*.pt
+*.h5
+*.joblib
+*.pkl
+*.onnx
+*.tflite
+*.pb
+
+# Serialized arrays and datasets
+*.npz
+*.npy
+*.csv
+*.tsv
+*.parquet
+
+# OS generated files
+.DS_Store
+Thumbs.db
