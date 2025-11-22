@@ -64,7 +64,11 @@ def run_train_classical_mlp(config):
         sample_X, _ = train_dataset[0]
         input_size = sample_X.numel()
 
-        model = MLPBinaryClassifier(input_size=input_size, hidden_sizes=config["model"]["hidden_sizes"]).to(DEVICE)
+        model = MLPBinaryClassifier(
+            input_size=input_size,
+            hidden_sizes=config["model"].get("hidden_sizes"),
+            dropout=config["model"].get("dropout", 0.3),
+        ).to(DEVICE)
         optimizer = optim.Adam(model.parameters(), lr=LR)
         scheduler = get_scheduler(optimizer, SCHEDULER_TYPE)
         criterion = nn.BCELoss()
@@ -117,7 +121,7 @@ def run_train_classical_mlp(config):
             writer.add_scalar("Accuracy/val", acc, epoch)
             writer.add_scalar("Precision/val", precision, epoch)
             writer.add_scalar("Recall/val", recall, epoch)
-            writer.add_scalar("BalancedAcc/val", bal_acc, epoch)
+            writer.add_scalar("BalancedAccuracy/val", bal_acc, epoch)
             writer.add_scalar("AUC/val", auc, epoch)
 
             wandb.log({
@@ -130,14 +134,19 @@ def run_train_classical_mlp(config):
                 "val/auc": auc,
             })
 
-            write_log(log_file,
-                      f"[Epoch {epoch}] Loss: {val_loss:.4f} | F1: {f1:.4f} | Acc: {acc:.4f} | "
-                      f"BalAcc: {bal_acc:.4f} | AUC: {auc:.4f} | Prec: {precision:.4f} | Rec: {recall:.4f}")
+            write_log(
+                log_file,
+                f"[Epoch {epoch}] Loss: {val_loss:.4f} | F1: {f1:.4f} | Acc: {acc:.4f} | "
+                f"Balanced Accuracy: {bal_acc:.4f} | AUC: {auc:.4f} | Prec: {precision:.4f} | Rec: {recall:.4f}"
+            )
 
             loss_history.append(val_loss)
             f1_history.append(f1)
 
-            print(f"[Fold {fold}][Epoch {epoch}] Loss: {val_loss:.4f} | F1: {f1:.4f} | Acc: {acc:.4f} | BalAcc: {bal_acc:.4f} | AUC: {auc:.4f}")
+            print(
+                f"[Fold {fold}][Epoch {epoch}] Loss: {val_loss:.4f} | F1: {f1:.4f} | "
+                f"Acc: {acc:.4f} | Balanced Accuracy: {bal_acc:.4f} | AUC: {auc:.4f}"
+            )
 
             if f1 > best_f1:
                 best_f1 = f1
@@ -193,8 +202,15 @@ def run_train_classical_mlp(config):
                 auc = float('nan')
             balanced_acc = balanced_accuracy_score(y_test_true, y_test_pred)
 
-            print(f"[Fold {fold}] Test Accuracy: {acc:.4f} | F1: {f1:.4f} | Precision: {precision:.4f} | Recall: {recall:.4f} | AUC: {auc:.4f} | Balanced Acc: {balanced_acc:.4f}")
-            write_log(log_file, f"\n[Fold {fold}] Test Accuracy: {acc:.4f} | F1: {f1:.4f} | Precision: {precision:.4f} | Recall: {recall:.4f} | AUC: {auc:.4f} | Balanced Acc: {balanced_acc:.4f}")
+            print(
+                f"[Fold {fold}] Test Accuracy: {acc:.4f} | F1: {f1:.4f} | Precision: {precision:.4f} | "
+                f"Recall: {recall:.4f} | AUC: {auc:.4f} | Balanced Accuracy: {balanced_acc:.4f}"
+            )
+            write_log(
+                log_file,
+                f"\n[Fold {fold}] Test Accuracy: {acc:.4f} | F1: {f1:.4f} | Precision: {precision:.4f} | "
+                f"Recall: {recall:.4f} | AUC: {auc:.4f} | Balanced Accuracy: {balanced_acc:.4f}"
+            )
 
             wandb.log({
                 f"test/f1": f1,

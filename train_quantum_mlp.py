@@ -75,7 +75,16 @@ def run_train_quantum_mlp(config):
         sample_X, _ = train_dataset[0]
         input_size = sample_X.numel()
 
-        model = QuantumResidualMLP(input_size=input_size).to(DEVICE)
+        model_hidden_sizes = config.get("model", {}).get("hidden_sizes", None)
+        quantum_cfg = config.get("quantum", {})
+        model = QuantumResidualMLP(
+            input_size=input_size,
+            hidden_sizes=model_hidden_sizes,
+            n_qubits=quantum_cfg.get("n_qubits", 4),
+            n_layers=quantum_cfg.get("layers", 2),
+            backend=quantum_cfg.get("backend", "lightning.qubit"),
+            shots=quantum_cfg.get("shots", None),
+        ).to(DEVICE)
         optimizer = optim.Adam(model.parameters(), lr=LR)
         scheduler = get_scheduler(optimizer, SCHEDULER_TYPE)
         criterion = nn.BCELoss()
@@ -135,7 +144,7 @@ def run_train_quantum_mlp(config):
             write_log(
                 log_file,
                 f"[Epoch {epoch}] Loss: {val_loss:.4f} | F1: {f1:.4f} | Acc: {acc:.4f} | "
-                f"BalAcc: {bal_acc:.4f} | AUC: {auc:.4f} | Prec: {precision:.4f} | Rec: {recall:.4f}"
+                f"Balanced Accuracy: {bal_acc:.4f} | AUC: {auc:.4f} | Prec: {precision:.4f} | Rec: {recall:.4f}"
             )
 
             loss_history.append(val_loss)
@@ -151,7 +160,10 @@ def run_train_quantum_mlp(config):
                 "val/auc": auc,
             })
 
-            print(f"[Fold {fold}][Epoch {epoch}] Loss: {val_loss:.4f} | F1: {f1:.4f} | BalAcc: {bal_acc:.4f} | AUC: {auc:.4f}")
+            print(
+                f"[Fold {fold}][Epoch {epoch}] Loss: {val_loss:.4f} | F1: {f1:.4f} | "
+                f"Acc: {acc:.4f} | Balanced Accuracy: {bal_acc:.4f} | AUC: {auc:.4f}"
+            )
 
             if f1 > best_f1:
                 best_f1 = f1
@@ -213,13 +225,13 @@ def run_train_quantum_mlp(config):
             bal_acc = balanced_accuracy_score(y_test_true, y_test_pred)
 
             print(
-                f"[Fold {fold}] Test Accuracy: {acc:.4f} | F1: {f1:.4f} | "
-                f"BalAcc: {bal_acc:.4f} | AUC: {auc:.4f} | Prec: {precision:.4f} | Rec: {recall:.4f}"
+                f"[Fold {fold}] Test Accuracy: {acc:.4f} | F1: {f1:.4f} | Precision: {precision:.4f} | "
+                f"Recall: {recall:.4f} | AUC: {auc:.4f} | Balanced Accuracy: {bal_acc:.4f}"
             )
             write_log(
                 log_file,
-                f"\n[Fold {fold}] Test Accuracy: {acc:.4f} | F1: {f1:.4f} | "
-                f"BalancedAcc: {bal_acc:.4f} | AUC: {auc:.4f} | Precision: {precision:.4f} | Recall: {recall:.4f}"
+                f"\n[Fold {fold}] Test Accuracy: {acc:.4f} | F1: {f1:.4f} | Precision: {precision:.4f} | "
+                f"Recall: {recall:.4f} | AUC: {auc:.4f} | Balanced Accuracy: {bal_acc:.4f}"
             )
 
             wandb.log({

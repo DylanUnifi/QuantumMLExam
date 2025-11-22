@@ -45,6 +45,8 @@ def run_train_cnn(config):
     PATIENCE = config["training"]["early_stopping"]
     SCHEDULER_TYPE = config.get("scheduler", None)
     IN_CHANNELS = config['model']['in_channels']
+    CONV_CHANNELS = config['model'].get('conv_channels')
+    HIDDEN_SIZES = config['model'].get('hidden_sizes')
 
     train_dataset, test_dataset = load_dataset_by_name(
         name=config["dataset"]["name"],
@@ -75,7 +77,12 @@ def run_train_cnn(config):
         train_loader = DataLoader(train_subset, batch_size=BATCH_SIZE, shuffle=True)
         val_loader = DataLoader(val_subset, batch_size=BATCH_SIZE)
 
-        model = CNNBinaryClassifier(in_channels=IN_CHANNELS).to(DEVICE)
+        model = CNNBinaryClassifier(
+            in_channels=IN_CHANNELS,
+            conv_channels=CONV_CHANNELS,
+            hidden_sizes=HIDDEN_SIZES,
+            dropout=config['model'].get('dropout', 0.3),
+        ).to(DEVICE)
         optimizer = optim.Adam(model.parameters(), lr=LR)
         scheduler = get_scheduler(optimizer, SCHEDULER_TYPE)
         criterion = nn.BCELoss()
@@ -105,16 +112,22 @@ def run_train_cnn(config):
                 total_loss += loss.item()
 
             model.eval()
-            y_true, y_pred = [], []
+            y_true, y_pred, y_probs = [], [], []
             with torch.no_grad():
                 for batch_X, batch_y in val_loader:
                     batch_X, batch_y = batch_X.to(DEVICE), batch_y.to(DEVICE)
-                    preds = model(batch_X).squeeze()
-                    preds = (preds >= 0.5).float()
+                    preds_logits = model(batch_X).squeeze()
+                    preds = (preds_logits >= 0.5).float()
                     y_true.extend(batch_y.tolist())
                     y_pred.extend(preds.cpu().tolist())
+                    y_probs.extend(preds_logits.cpu().tolist())
 
             acc, f1, precision, recall = log_metrics(y_true, y_pred)
+            try:
+                auc = roc_auc_score(y_true, y_probs)
+            except ValueError:
+                auc = 0.0
+            bal_acc = balanced_accuracy_score(y_true, y_pred)
             val_loss = total_loss / len(train_loader)
 
             writer.add_scalar("Loss/train", val_loss, epoch)
@@ -122,6 +135,8 @@ def run_train_cnn(config):
             writer.add_scalar("Accuracy/val", acc, epoch)
             writer.add_scalar("Precision/val", precision, epoch)
             writer.add_scalar("Recall/val", recall, epoch)
+            writer.add_scalar("BalancedAccuracy/val", bal_acc, epoch)
+            writer.add_scalar("AUC/val", auc, epoch)
 
             wandb.log({
                 "val/loss": val_loss,
@@ -129,14 +144,23 @@ def run_train_cnn(config):
                 "val/accuracy": acc,
                 "val/precision": precision,
                 "val/recall": recall,
+                "val/balanced_accuracy": bal_acc,
+                "val/auc": auc,
             })
 
-            write_log(log_file, f"[Epoch {epoch}] Loss: {val_loss:.4f} | F1: {f1:.4f} | Acc: {acc:.4f} | Prec: {precision:.4f} | Rec: {recall:.4f}")
+            write_log(
+                log_file,
+                f"[Epoch {epoch}] Loss: {val_loss:.4f} | F1: {f1:.4f} | Acc: {acc:.4f} | "
+                f"Balanced Accuracy: {bal_acc:.4f} | AUC: {auc:.4f} | Prec: {precision:.4f} | Rec: {recall:.4f}"
+            )
 
             loss_history.append(val_loss)
             f1_history.append(f1)
 
-            print(f"[Fold {fold}][Epoch {epoch}] Loss: {val_loss:.4f} | F1: {f1:.4f}")
+            print(
+                f"[Fold {fold}][Epoch {epoch}] Loss: {val_loss:.4f} | F1: {f1:.4f} | "
+                f"Acc: {acc:.4f} | Balanced Accuracy: {bal_acc:.4f} | AUC: {auc:.4f}"
+            )
 
             if f1 > best_f1:
                 best_f1 = f1
@@ -196,8 +220,15 @@ def run_train_cnn(config):
                 auc = float('nan')
             balanced_acc = balanced_accuracy_score(y_test_true, y_test_pred)
 
-            print(f"[Fold {fold}] Test Accuracy: {acc:.4f} | F1: {f1:.4f} | Precision: {precision:.4f} | Recall: {recall:.4f} | AUC: {auc:.4f} | Balanced Acc: {balanced_acc:.4f}")
-            write_log(log_file, f"\n[Fold {fold}] Test Accuracy: {acc:.4f} | F1: {f1:.4f} | Precision: {precision:.4f} | Recall: {recall:.4f} | AUC: {auc:.4f} | Balanced Acc: {balanced_acc:.4f}")
+            print(
+                f"[Fold {fold}] Test Accuracy: {acc:.4f} | F1: {f1:.4f} | Precision: {precision:.4f} | "
+                f"Recall: {recall:.4f} | AUC: {auc:.4f} | Balanced Accuracy: {balanced_acc:.4f}"
+            )
+            write_log(
+                log_file,
+                f"\n[Fold {fold}] Test Accuracy: {acc:.4f} | F1: {f1:.4f} | Precision: {precision:.4f} | "
+                f"Recall: {recall:.4f} | AUC: {auc:.4f} | Balanced Accuracy: {balanced_acc:.4f}"
+            )
 
             wandb.log({
                 f"test/f1": f1,
