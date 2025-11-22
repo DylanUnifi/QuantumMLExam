@@ -9,7 +9,7 @@ import sys
 import wandb
 
 from configs.config import load_config
-from train_classical import run_train_classical
+from train_classical_mlp import run_train_classical_mlp
 from train_cnn import run_train_cnn
 from train_hybrid_qcnn import run_train_hybrid_qcnn
 from train_svm import run_train_svm
