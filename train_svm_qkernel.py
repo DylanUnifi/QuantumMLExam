@@ -22,10 +22,10 @@ def build_kernel_fn(n_wires: int, n_layers: int, rotation: str = "Y", device_nam
 
     @qml.qnode(dev)
     def feature_map(x):
-        qml.AngleEmbedding(x, wires=wires, rotation=rotation, normalize=True)
+        qml.AngleEmbedding(x, wires=wires, rotation=rotation)
         for _ in range(n_layers):
             qml.broadcast(qml.CZ, wires=wires, pattern="ring")
-            qml.AngleEmbedding(x, wires=wires, rotation=rotation, normalize=True)
+            qml.AngleEmbedding(x, wires=wires, rotation=rotation)
         return qml.state()
 
     def fidelity_kernel(x, y):
@@ -100,6 +100,7 @@ def run_train_svm_qkernel(config):
     device_name = select_device_name(qkernel_cfg, n_wires)
     use_pca = qkernel_cfg.get("use_pca", True)
     pca_components = qkernel_cfg.get("pca_components", n_wires)
+    max_samples = qkernel_cfg.get("max_samples", 1500)
     C = qkernel_cfg.get("C", 1.0)
 
     log_path, log_file = init_logger(log_dir, "svm_qkernel")
@@ -114,6 +115,9 @@ def run_train_svm_qkernel(config):
         binary_classes=binary_classes,
         grayscale=grayscale,
     )
+
+    indices = torch.randperm(len(train_dataset))[:max_samples]
+    train_dataset = Subset(train_dataset, indices)
     print(f"Nombre d'exemples chargés dans train_dataset : {len(train_dataset)}")
 
     X_raw, y_raw = prepare_features(train_dataset, batch_size=batch_size)
