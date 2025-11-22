@@ -26,12 +26,6 @@ def run_train_quantum_mlp(config):
     base_exp_name = config.get("experiment_name", "default_exp")
     EXPERIMENT_NAME = f"{dataset_name}_{base_exp_name}"
 
-    wandb.init(
-        project="qml_project",
-        name=EXPERIMENT_NAME,
-        config=config
-    )
-
     SAVE_DIR = os.path.join("engine/checkpoints", "quantum_mlp", EXPERIMENT_NAME)
     CHECKPOINT_DIR = os.path.join(SAVE_DIR, "folds")
     os.makedirs(CHECKPOINT_DIR, exist_ok=True)
@@ -247,11 +241,3 @@ def run_train_quantum_mlp(config):
             log_file.close()
 
     print("Quantum MLP training complete.")
-    wandb.finish()
-
-
-if __name__ == "__main__":
-    import yaml
-    with open("configs/config_train_quantum_mlp_fashion.yaml", "r") as f:
-        config = yaml.safe_load(f)
-    run_train_quantum_mlp(config)
