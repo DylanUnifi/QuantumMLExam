@@ -4,12 +4,8 @@ dataset:
   name: svhn
   binary_classes: [3, 8]
 
-training:
-  batch_size: 256
-  epochs: 1  # Dummy value
-
 svm:
-  use_pca: false
+  use_pca: true
   pca_components: 50
   optimize: true
   n_trials: 30
@@ -20,3 +16,7 @@ svm:
   default_kernel: "rbf"
   default_gamma: "scale"
   use_gpu: true
+
+checkpoint:
+  save_dir: "checkpoints"
+  subdir: "svhn_svm"
