@@ -5,7 +5,7 @@ dataset:
   binary_classes: [3, 8]
 
 svm:
-  use_pca: false
+  use_pca: true
   pca_components: 50
   optimize: true
   n_trials: 30
