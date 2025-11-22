@@ -1,0 +1,23 @@
+experiment_name: "svm_qkernel_fashion_exp"
+
+dataset:
+  name: fashion_mnist
+  binary_classes: [3, 8]
+  grayscale: true
+
+training:
+  batch_size: 256
+
+qkernel:
+  n_wires: 6
+  n_layers: 2
+  rotation: "Y"
+  device: "default.qubit"
+  use_pca: true
+  pca_components: 6
+  max_samples: 2000
+  C: 2.0
+
+checkpoint:
+  save_dir: "checkpoints"
+  subdir: "fashion_mnist_svm_qkernel"
