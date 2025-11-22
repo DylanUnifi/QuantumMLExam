@@ -63,6 +63,16 @@ class EnhancedSVM(BaseEstimator, ClassifierMixin):
                 print(f"[Warning] Could not move data to GPU ({e}); continuing on CPU.")
         return X_transformed
 
+    def _transform_input(self, X):
+        if not self.auto_transform:
+            return X
+        X_transformed = X
+        if self.scaler is not None:
+            X_transformed = self.scaler.transform(X_transformed)
+        if self.use_pca and self.pca_model is not None:
+            X_transformed = self.pca_model.transform(X_transformed)
+        return X_transformed
+
     def fit(self, X, y):
         X_transformed = self._transform_input(X)
         self.model.fit(X_transformed, y)
@@ -108,7 +118,7 @@ class EnhancedSVM(BaseEstimator, ClassifierMixin):
         os.makedirs(self.save_path, exist_ok=True)
         model_path = os.path.join(self.save_path, "svm_model.pkl")
         joblib.dump(self, model_path)
-        print(f"✅ Modèle sauvegardé avec succès : {model_path}")
+        print(f"Modèle sauvegardé avec succès : {model_path}")
 
     @staticmethod
     def load(path):
