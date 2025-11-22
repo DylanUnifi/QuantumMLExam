@@ -38,7 +38,7 @@ def main():
                         help="Weights & Biases project name")
 
     args = parser.parse_args()
-    available_models = {"classical_mlp", "cnn", "svm", "quantum_mlp", "qcnn", "svm_qkernel"}
+    available_models = {"classical_mlp", "cnn", "svm", "quantum_mlp", "hybrid_qcnn", "svm_qkernel"}
 
     if args.model not in available_models:
         print(f"[ERROR] Unsupported model '{args.model}'. Choose from: {', '.join(available_models)}.")
@@ -71,14 +71,11 @@ def main():
     elif args.model == "cnn":
         run_train_cnn(config)
         wandb.finish()
-    elif args.model == "qcnn":
-        run_train_qcnn(config)
+    elif args.model == "hybrid_qcnn":
+        run_train_hybrid_qcnn(config)
         wandb.finish()
     elif args.model == "quantum_mlp":
         run_train_quantum_mlp(config)
-        wandb.finish()
-    elif args.model == "svm_qkernel":
-        run_train_svm_qkernel(config)
         wandb.finish()
     elif args.model == "svm":
         config.setdefault("svm", {})
