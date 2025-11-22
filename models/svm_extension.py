@@ -78,7 +78,7 @@ class EnhancedSVM(BaseEstimator, ClassifierMixin):
         os.makedirs(self.save_path, exist_ok=True)
         model_path = os.path.join(self.save_path, "svm_model.pkl")
         joblib.dump(self, model_path)
-        print(f"✅ Modèle sauvegardé avec succès : {model_path}")
+        print(f"Modèle sauvegardé avec succès : {model_path}")
 
     @staticmethod
     def load(path):
