@@ -63,16 +63,6 @@ class EnhancedSVM(BaseEstimator, ClassifierMixin):
                 print(f"[Warning] Could not move data to GPU ({e}); continuing on CPU.")
         return X_transformed
 
-    def _transform_input(self, X):
-        if not self.auto_transform:
-            return X
-        X_transformed = X
-        if self.scaler is not None:
-            X_transformed = self.scaler.transform(X_transformed)
-        if self.use_pca and self.pca_model is not None:
-            X_transformed = self.pca_model.transform(X_transformed)
-        return X_transformed
-
     def fit(self, X, y):
         X_transformed = self._transform_input(X)
         self.model.fit(X_transformed, y)

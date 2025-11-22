@@ -36,10 +36,8 @@ def create_quantum_layer(
     device_kwargs = {"wires": n_qubits, "shots": shots}
     selected_backend = backend
 
-    if use_gpu and torch.cuda.is_available():
-        if backend.startswith("lightning"):
-            selected_backend = "lightning.gpu"
-        device_kwargs["torch_device"] = "cuda"
+    if use_gpu and torch.cuda.is_available() and backend.startswith("lightning"):
+        selected_backend = "lightning.gpu"
 
     dev = qml.device(selected_backend, **device_kwargs)  # backend différentiable
 
