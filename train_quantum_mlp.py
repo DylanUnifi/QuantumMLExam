@@ -161,7 +161,7 @@ def run_train_quantum_mlp(config):
 
             print(
                 f"[Fold {fold}][Epoch {epoch}] Loss: {val_loss:.4f} | F1: {f1:.4f} | "
-                f"Balanced Accuracy: {bal_acc:.4f} | AUC: {auc:.4f}"
+                f"Acc: {acc:.4f} | Balanced Accuracy: {bal_acc:.4f} | AUC: {auc:.4f}"
             )
 
             if f1 > best_f1:
