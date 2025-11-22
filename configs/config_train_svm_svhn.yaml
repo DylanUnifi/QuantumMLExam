@@ -7,7 +7,9 @@ dataset:
 svm:
   use_pca: true
   pca_components: 50
-  optimize: true
+  use_gpu: true
+
+optuna:
   n_trials: 30
   kernel_options: ["rbf", "poly", "sigmoid"]
   C_range: [0.001, 1000.0]
@@ -15,4 +17,8 @@ svm:
   default_C: 1.0
   default_kernel: "rbf"
   default_gamma: "scale"
-  use_gpu: true
+
+checkpoint:
+  save_dir: "checkpoints"
+  subdir: "svhn_svm"
+  
