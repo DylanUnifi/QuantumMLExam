@@ -16,7 +16,3 @@ svm:
   default_kernel: "rbf"
   default_gamma: "scale"
   use_gpu: true
-
-checkpoint:
-  save_dir: "checkpoints"
-  subdir: "cifar10_svm"

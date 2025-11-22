@@ -30,6 +30,8 @@ training:
     step_size: 10
     gamma: 0.5
 
-checkpoint:
-  save_dir: "checkpoints"
-  subdir: "svhn_quantum_mlp"
+quantum:
+  n_qubits: 4
+  layers: 2
+  backend: "lightning.qubit"
+  use_gpu: true

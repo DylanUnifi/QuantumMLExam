@@ -29,20 +29,27 @@ pip install --upgrade pip
 pip install -r requirements.txt
 ```
 
-### Docker (CPU by default)
-Build and run the project without installing dependencies locally:
+### Docker / Docker Compose
+Build and run the project without installing dependencies locally. CPU-only image:
 ```bash
 docker build -t quantum-ml-exam .
-
-# Inspect available options
 docker run --rm quantum-ml-exam
-
-# Example: train the hybrid QCNN on Fashion-MNIST with outputs persisted locally
-docker run --rm -v $(pwd)/outputs:/app/outputs quantum-ml-exam \
-  python main.py --model hybrid_qcnn --config configs/config_train_hybrid_qcnn_fashion.yaml
 ```
 
-GPU acceleration for quantum layers or cuML-based SVMs requires a CUDA-enabled base image and the NVIDIA Container Toolkit. Rebuild with an appropriate PyTorch CUDA image and install `pennylane-lightning[gpu]`/`cupy`/`cuml` inside the Dockerfile, then launch with `--gpus all`.
+Use Docker Compose for repeatable runs and persisted outputs:
+```bash
+# CPU (default)
+docker compose up --build trainer
+
+# GPU (requires NVIDIA Container Toolkit) — uses the CUDA base image and cu-enabled torch by default
+docker compose --profile gpu up --build trainer-gpu
+
+# Override the command
+docker compose run trainer python main.py --model hybrid_qcnn --config configs/config_train_hybrid_qcnn_fashion.yaml
+```
+Each YAML controls dataset settings (grayscale vs RGB, class subset), model hyperparameters (channels/hidden sizes, quantum qubits/layers, backend, shots), training knobs (epochs, early stopping), and data-loader performance flags (workers, pin memory, prefetch).
+
+GPU images rely on the `pytorch/pytorch:2.3.1-cuda12.1-cudnn8-runtime` base with CUDA wheels (`TORCH_SPEC`/`TORCH_INDEX_URL` build args). Customize these args in `docker-compose.yml` or via the command line to target different CUDA versions.
 
 ### Unified entrypoint
 Use `main.py` to launch any model with its config:

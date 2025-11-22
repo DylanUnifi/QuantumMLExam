@@ -8,7 +8,8 @@ svm:
   use_pca: false
   pca_components: 50
   use_gpu: true
-  optimize: true
+
+optuna:
   n_trials: 30
   kernel_options: ["rbf", "poly", "sigmoid"]
   C_range: [0.001, 1000.0]
