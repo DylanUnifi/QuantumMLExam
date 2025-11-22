@@ -1,5 +1,4 @@
 # train_hybrid_qcnn.py
-# Version: 4.2 – Nouvelle version pour Hybrid QCNN avec K-Fold Cross-Validation et intégration wandb
 
 import os
 import torch
@@ -209,10 +208,3 @@ def run_train_hybrid_qcnn(config):
 
     print("Hybrid QCNN training and evaluation complete.")
     wandb.finish()
-
-
-if __name__ == "__main__":
-    import yaml
-    with open("configs/config_train_qcnn_fashion.yaml", "r") as f:
-        config = yaml.safe_load(f)
-    run_train_hybrid_qcnn(config)

@@ -1,5 +1,4 @@
-# train_classical.py
-# Version: 4.2 – Nouvelle version pour MLP classique avec K-Fold Cross-Validation et intégration wandb
+# train_classical_mlp.py
 
 import os
 import torch
@@ -8,6 +7,11 @@ import torch.optim as optim
 from sklearn.model_selection import KFold
 from torch.utils.tensorboard import SummaryWriter
 from torch.utils.data import DataLoader, Subset
+import wandb
+from tqdm import tqdm, trange
+from sklearn.metrics import roc_auc_score, balanced_accuracy_score
+
+
 from models.classical import MLPBinaryClassifier
 from utils.checkpoint import save_checkpoint, safe_load_checkpoint
 from utils.early_stopping import EarlyStopping
@@ -16,12 +20,10 @@ from data_loader.utils import load_dataset_by_name
 from utils.scheduler import get_scheduler
 from utils.visual import save_plots
 from utils.logger import init_logger, write_log
-import wandb
-from tqdm import tqdm, trange
-from sklearn.metrics import roc_auc_score, balanced_accuracy_score
+
 
 def run_train_classical_mlp(config):
-    dataset_name = config["dataset"]["name"]  # Ex: "fashion-mnist", "cifar10", "svhn"
+    dataset_name = config["dataset"]["name"]
     base_exp_name = config.get("experiment_name", "default_exp")
     EXPERIMENT_NAME = f"{dataset_name}_{base_exp_name}"
     SAVE_DIR = os.path.join("engine/checkpoints", "classical", EXPERIMENT_NAME)
@@ -209,11 +211,4 @@ def run_train_classical_mlp(config):
             log_file.close()
 
     print("Training and evaluation complete.")
-    wandb.finish()
-
-if __name__ == "__main__":
-    import yaml
-    with open("configs/config_train_classical_mlp_fashion.yaml", "r") as f:
-        config = yaml.safe_load(f)
-    run_train_classical_mlp(config)
     wandb.finish()

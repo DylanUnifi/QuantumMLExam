@@ -2,25 +2,24 @@ experiment_name: "qcnn_fashion_exp"
 
 dataset:
   name: fashion_mnist
-  binary_classes: [3, 8]  # Ex: Pull-over vs Sandal
-  in_channels: 1
+  binary_classes: [3, 8]
 
 training:
   batch_size: 64
-  epochs: 20                # Nombre d'époques pour l'entraînement du feature extractor
-  learning_rate: 0.0005      # LR initial pour Adam
-  kfold: 3                   # Nombre de splits pour KFold cross-validation
-  early_stopping: 10          # Patience d'early stopping
-  scheduler: "StepLR"          # Options: null, StepLR, MultiStepLR, CosineAnnealingLR
+  epochs: 20                
+  learning_rate: 0.0005      
+  kfold: 3                   
+  early_stopping: 10          
+  scheduler: "StepLR"          
   scheduler_params:
-    step_size: 10              # Applicable à StepLR
-    gamma: 0.5                 # Facteur de réduction du LR
+    step_size: 10              
+    gamma: 0.5                 
 
 model:
-  input_size: 784  # Fashion-MNIST images 28x28 aplaties
-  in_channels: 1  # Fashion-MNIST est en niveaux de gris comme MNIST
+  input_size: 784  
+  in_channels: 1  
   hidden_sizes: [128, 64, 32]
-  grayscale: true   # permet de choisir depuis le yaml
+  grayscale: true   
 
 checkpoint:
   save_dir: "checkpoints"
