@@ -19,6 +19,7 @@ qkernel:
   pca_components: 8
   max_samples: 2000
   C: 1.5
+  kernel_workers: 4
 
 checkpoint:
   save_dir: "checkpoints"
