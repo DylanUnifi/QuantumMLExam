@@ -10,8 +10,8 @@ model:
   grayscale: false  
 
 quantum:
-  n_qubits: 8
-  layers: 1
+  n_qubits: 6
+  layers: 2
   backend: "lightning.qubit" 
 
 training:
@@ -31,4 +31,4 @@ training:
 
 checkpoint:
   save_dir: "checkpoints"
-  subdir: "svhn_qcnn"
+  subdir: "svhn_hybrid_qcnn"

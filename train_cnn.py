@@ -31,12 +31,6 @@ def run_train_cnn(config):
     CHECKPOINT_DIR = os.path.join(SAVE_DIR, "folds")
     os.makedirs(CHECKPOINT_DIR, exist_ok=True)
 
-    wandb.init(
-        project="qml_project",
-        name=EXPERIMENT_NAME,
-        config=config
-    )
-
     DEVICE = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     BATCH_SIZE = config["training"]["batch_size"]
     EPOCHS = config["training"]["epochs"]
@@ -243,11 +237,3 @@ def run_train_cnn(config):
             log_file.close()
 
     print("CNN Training and evaluation complete.")
-    wandb.finish()
-
-
-if __name__ == "__main__":
-    import yaml
-    with open("configs/config_train_cnn_fashion.yaml", "r") as f:
-        config = yaml.safe_load(f)
-    run_train_cnn(config)
