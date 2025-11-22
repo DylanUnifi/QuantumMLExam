@@ -64,7 +64,11 @@ def run_train_classical_mlp(config):
         sample_X, _ = train_dataset[0]
         input_size = sample_X.numel()
 
-        model = MLPBinaryClassifier(input_size=input_size, hidden_sizes=config["model"]["hidden_sizes"]).to(DEVICE)
+        model = MLPBinaryClassifier(
+            input_size=input_size,
+            hidden_sizes=config["model"].get("hidden_sizes"),
+            dropout=config["model"].get("dropout", 0.3),
+        ).to(DEVICE)
         optimizer = optim.Adam(model.parameters(), lr=LR)
         scheduler = get_scheduler(optimizer, SCHEDULER_TYPE)
         criterion = nn.BCELoss()
