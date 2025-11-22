@@ -10,8 +10,8 @@ model:
   grayscale: false   
 
 quantum:
-  n_qubits: 4
-  layers: 1
+  n_qubits: 8
+  layers: 3
   backend: "lightning.qubit"
 
 training:

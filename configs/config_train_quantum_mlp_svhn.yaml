@@ -16,6 +16,6 @@ training:
     gamma: 0.5
 
 quantum:
-  n_qubits: 4
-  layers: 2
+  n_qubits: 6
+  layers: 3
   backend: "lightning.qubit"

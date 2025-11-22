@@ -25,5 +25,5 @@ checkpoint:
 
 quantum:
   n_qubits: 4
-  layers: 2
+  layers: 1
   backend: "lightning.qubit"
