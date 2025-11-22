@@ -1,5 +1,4 @@
 # trainer.py
-# Version: 2.1
 
 import torch
 from sklearn.metrics import accuracy_score, f1_score, precision_score, recall_score
