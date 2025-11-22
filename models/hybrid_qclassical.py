@@ -29,12 +29,12 @@ class ResidualMLPBlock(nn.Module):
         return F.relu(out)
 
 class QuantumLayer(nn.Module):
-    def __init__(self, n_qubits, n_layers):
+    def __init__(self, n_qubits, n_layers, backend="lightning.qubit", shots=None):
         super().__init__()
         self.n_qubits = n_qubits
         self.n_layers = n_layers
 
-        self.dev = qml.device("lightning.qubit", wires=n_qubits, shots=None)  # backend différentiable
+        self.dev = qml.device(backend, wires=n_qubits, shots=shots)  # backend différentiable
 
         @qml.qnode(self.dev, interface="torch")
         def circuit(inputs, weights):
@@ -66,23 +66,35 @@ class QuantumLayer(nn.Module):
         return torch.cat(outputs, dim=0)  # shape [batch_size, n_qubits]
 
 class QuantumResidualMLP(nn.Module):
-    def __init__(self, input_size, hidden_sizes=None, n_qubits=4, n_layers=2, dropout=0.3):
+    def __init__(
+        self,
+        input_size,
+        hidden_sizes=None,
+        n_qubits=4,
+        n_layers=2,
+        dropout=0.3,
+        backend="lightning.qubit",
+        shots=None,
+    ):
         super().__init__()
         if hidden_sizes is None:
             hidden_sizes = [128, 64, 32]
 
-        self.block1 = ResidualMLPBlock(input_size, hidden_sizes[0], downsample=True, dropout=dropout)
-        self.block2 = ResidualMLPBlock(hidden_sizes[0], hidden_sizes[1], downsample=True, dropout=dropout)
-        self.block3 = ResidualMLPBlock(hidden_sizes[1], hidden_sizes[2], downsample=True, dropout=dropout)
+        blocks = []
+        prev_dim = input_size
+        for hidden_dim in hidden_sizes:
+            blocks.append(ResidualMLPBlock(prev_dim, hidden_dim, downsample=True, dropout=dropout))
+            prev_dim = hidden_dim
+        self.blocks = nn.ModuleList(blocks)
+
         self.dropout = nn.Dropout(dropout)
-        self.quantum = QuantumLayer(n_qubits=n_qubits, n_layers=n_layers)
+        self.quantum = QuantumLayer(n_qubits=n_qubits, n_layers=n_layers, backend=backend, shots=shots)
         self.bn_q = nn.LayerNorm(n_qubits)  # stabilisation de la sortie quantique
         self.fc = nn.Linear(n_qubits, 1)
 
     def forward(self, x):
-        x = self.block1(x)
-        x = self.block2(x)
-        x = self.block3(x)
+        for block in self.blocks:
+            x = block(x)
         x = self.dropout(x)
         x = self.quantum(x)
         x = self.bn_q(x)
