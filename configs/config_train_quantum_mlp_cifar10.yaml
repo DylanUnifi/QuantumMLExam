@@ -6,7 +6,7 @@ dataset:
 
 training:
   batch_size: 32
-  epochs: 100
+  epochs: 50
   learning_rate: 0.0005
   kfold: 3
   early_stopping: 15
