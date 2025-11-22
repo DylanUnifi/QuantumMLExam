@@ -31,6 +31,28 @@ def build_kernel_fn(n_wires: int, n_layers: int, rotation: str = "Y", device_nam
     return qml.kernels.state_kernel(feature_map)
 
 
+def select_device_name(qkernel_cfg, n_wires: int):
+    base_device = qkernel_cfg.get("device", "default.qubit")
+    use_gpu = qkernel_cfg.get("use_gpu", False)
+    gpu_device = qkernel_cfg.get("gpu_device", "lightning.gpu")
+
+    if not use_gpu:
+        return base_device
+
+    if not torch.cuda.is_available():
+        print("[Warning] GPU requested for qkernel but CUDA is not available; falling back to CPU device.")
+        return base_device
+
+    try:
+        # Probe the GPU-backed device to ensure PennyLane can instantiate it
+        qml.device(gpu_device, wires=n_wires)
+        print(f"[Info] Using GPU-backed PennyLane device: {gpu_device}")
+        return gpu_device
+    except Exception as exc:  # pragma: no cover - backend availability depends on environment
+        print(f"[Warning] Could not create GPU device '{gpu_device}' ({exc}); falling back to {base_device}.")
+        return base_device
+
+
 def prepare_features(dataset, batch_size):
     loader = DataLoader(dataset, batch_size=batch_size, shuffle=False)
     X_parts, y_parts = [], []
@@ -69,14 +91,17 @@ def run_train_svm_qkernel(config):
     n_wires = qkernel_cfg.get("n_wires", 6)
     n_layers = qkernel_cfg.get("n_layers", 2)
     rotation = qkernel_cfg.get("rotation", "Y")
-    device_name = qkernel_cfg.get("device", "default.qubit")
+    device_name = select_device_name(qkernel_cfg, n_wires)
     use_pca = qkernel_cfg.get("use_pca", True)
     pca_components = qkernel_cfg.get("pca_components", n_wires)
     max_samples = qkernel_cfg.get("max_samples", 1500)
     C = qkernel_cfg.get("C", 1.0)
 
     log_path, log_file = init_logger(log_dir, "svm_qkernel")
-    write_log(log_file, f"[QKernel SVM] Dataset: {dataset_name}, wires: {n_wires}, layers: {n_layers}, PCA: {use_pca} ({pca_components}), device: {device_name}\n")
+    write_log(
+        log_file,
+        f"[QKernel SVM] Dataset: {dataset_name}, wires: {n_wires}, layers: {n_layers}, PCA: {use_pca} ({pca_components}), device: {device_name}, use_gpu: {qkernel_cfg.get('use_gpu', False)}\n",
+    )
 
     train_dataset, test_dataset = load_dataset_by_name(
         name=dataset_name,
