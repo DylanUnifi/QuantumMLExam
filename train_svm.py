@@ -90,8 +90,8 @@ def run_train_svm(config):
         grayscale=grayscale,
     )
 
-    indices = torch.randperm(len(train_dataset))[:max_samples]
-    train_dataset = Subset(train_dataset, indices)
+    # indices = torch.randperm(len(train_dataset))[:max_samples]
+    # train_dataset = Subset(train_dataset, indices)
 
     print(f"Nombre d'exemples chargés dans train_dataset : {len(train_dataset)}")
 
