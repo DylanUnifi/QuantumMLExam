@@ -1,12 +1,15 @@
 import os
+import time
 import joblib
 import matplotlib.pyplot as plt
 import numpy as np
 import pennylane as qml
+from joblib import Parallel, delayed
 from sklearn.metrics import confusion_matrix, ConfusionMatrixDisplay, balanced_accuracy_score, roc_auc_score
 from sklearn.model_selection import train_test_split
 from sklearn.preprocessing import StandardScaler
 from sklearn.svm import SVC
+from tqdm.auto import tqdm
 import torch
 from torch.utils.data import Subset, DataLoader
 
@@ -59,6 +62,25 @@ def select_device_name(qkernel_cfg, n_wires: int):
         return base_device
 
 
+def _compute_kernel_row(x_row, X_ref, kernel_fn):
+    return [kernel_fn(x_row, x_ref) for x_ref in X_ref]
+
+
+def compute_kernel_matrix_with_progress(X_left, X_right, kernel_fn, workers: int = 1, desc: str = ""):
+    workers = max(1, int(workers or 1))
+    iterator = range(len(X_left))
+    if desc:
+        iterator = tqdm(iterator, desc=desc)
+
+    if workers == 1:
+        rows = [_compute_kernel_row(X_left[i], X_right, kernel_fn) for i in iterator]
+    else:
+        rows = Parallel(n_jobs=workers, prefer="threads")(
+            delayed(_compute_kernel_row)(X_left[i], X_right, kernel_fn) for i in iterator
+        )
+    return np.array(rows)
+
+
 def prepare_features(dataset, batch_size):
     loader = DataLoader(dataset, batch_size=batch_size, shuffle=False)
     X_parts, y_parts = [], []
@@ -102,11 +124,12 @@ def run_train_svm_qkernel(config):
     pca_components = qkernel_cfg.get("pca_components", n_wires)
     max_samples = qkernel_cfg.get("max_samples", 1500)
     C = qkernel_cfg.get("C", 1.0)
+    kernel_workers = qkernel_cfg.get("kernel_workers") or os.cpu_count() or 1
 
     log_path, log_file = init_logger(log_dir, "svm_qkernel")
     write_log(
         log_file,
-        f"[QKernel SVM] Dataset: {dataset_name}, wires: {n_wires}, layers: {n_layers}, PCA: {use_pca} ({pca_components}), device: {device_name}, use_gpu: {qkernel_cfg.get('use_gpu', False)}\n",
+        f"[QKernel SVM] Dataset: {dataset_name}, wires: {n_wires}, layers: {n_layers}, PCA: {use_pca} ({pca_components}), device: {device_name}, use_gpu: {qkernel_cfg.get('use_gpu', False)}, kernel_workers: {kernel_workers}\n",
     )
 
     train_dataset, test_dataset = load_dataset_by_name(
@@ -152,8 +175,17 @@ def run_train_svm_qkernel(config):
 
     kernel_fn = build_kernel_fn(n_wires=n_wires, n_layers=n_layers, rotation=rotation, device_name=device_name)
 
-    K_train = qml.kernels.square_kernel_matrix(X_train_proc, kernel_fn)
-    K_val = qml.kernels.kernel_matrix(X_val_proc, X_train_proc, kernel_fn)
+    write_log(log_file, f"Building training kernel matrix with {kernel_workers} worker(s)...\n")
+    t_start = time.time()
+    K_train = compute_kernel_matrix_with_progress(
+        X_train_proc, X_train_proc, kernel_fn, workers=kernel_workers, desc="Train kernel rows"
+    )
+    write_log(log_file, f"Finished training kernel matrix in {time.time() - t_start:.2f}s\n")
+
+    write_log(log_file, "Building validation kernel matrix...\n")
+    K_val = compute_kernel_matrix_with_progress(
+        X_val_proc, X_train_proc, kernel_fn, workers=kernel_workers, desc="Val kernel rows"
+    )
 
     svm_model = SVC(kernel="precomputed", C=C, probability=True)
     svm_model.fit(K_train, y_train)
@@ -189,7 +221,10 @@ def run_train_svm_qkernel(config):
     if test_dataset is not None:
         X_test_raw, y_test = prepare_features(test_dataset, batch_size=batch_size)
         X_test_proc = transform_features(X_test_raw)
-        K_test = qml.kernels.kernel_matrix(X_test_proc, X_train_proc, kernel_fn)
+        write_log(log_file, "Building test kernel matrix...\n")
+        K_test = compute_kernel_matrix_with_progress(
+            X_test_proc, X_train_proc, kernel_fn, workers=kernel_workers, desc="Test kernel rows"
+        )
 
         y_pred_test = svm_model.predict(K_test)
         acc_test, f1_test, precision_test, recall_test = log_metrics(y_test, y_pred_test)
