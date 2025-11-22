@@ -36,6 +36,13 @@ def run_train_hybrid_qcnn(config):
     PATIENCE = config["training"]["early_stopping"]
     SCHEDULER_TYPE = config.get("scheduler", None)
     IN_CHANNELS = config['model']['in_channels']
+    MODEL_HIDDEN_SIZES = config['model'].get('hidden_sizes', [])
+    MODEL_CONV_CHANNELS = config['model'].get('conv_channels', None)
+    QUANTUM_CFG = config.get("quantum", {})
+    N_QUBITS = QUANTUM_CFG.get("n_qubits", 4)
+    Q_LAYERS = QUANTUM_CFG.get("layers", 1)
+    Q_BACKEND = QUANTUM_CFG.get("backend", "lightning.qubit")
+    Q_SHOTS = QUANTUM_CFG.get("shots", None)
 
     train_dataset, test_dataset = load_dataset_by_name(
         name=dataset_name,
@@ -58,8 +65,15 @@ def run_train_hybrid_qcnn(config):
         train_loader = DataLoader(Subset(train_dataset, train_idx), batch_size=BATCH_SIZE, shuffle=True)
         val_loader = DataLoader(Subset(train_dataset, val_idx), batch_size=BATCH_SIZE)
 
-        input_size = train_dataset[0][0].numel()
-        model = HybridQCNNBinaryClassifier(input_channel=IN_CHANNELS).to(DEVICE)
+        model = HybridQCNNBinaryClassifier(
+            input_channel=IN_CHANNELS,
+            n_qubits=N_QUBITS,
+            n_layers=Q_LAYERS,
+            backend=Q_BACKEND,
+            shots=Q_SHOTS,
+            conv_channels=MODEL_CONV_CHANNELS,
+            hidden_sizes=MODEL_HIDDEN_SIZES,
+        ).to(DEVICE)
         optimizer = optim.Adam(model.parameters(), lr=LR)
         scheduler = get_scheduler(optimizer, SCHEDULER_TYPE)
         criterion = nn.BCELoss()
@@ -79,7 +93,7 @@ def run_train_hybrid_qcnn(config):
             model.train()
             total_loss = 0
             for batch_X, batch_y in tqdm(train_loader, desc=f"[Fold {fold}] Batches"):
-                batch_X, batch_y = batch_X.view(batch_X.size(0), -1).to(DEVICE), batch_y.to(DEVICE)
+                batch_X, batch_y = batch_X.to(DEVICE), batch_y.to(DEVICE)
                 optimizer.zero_grad()
                 outputs = model(batch_X).squeeze()
                 loss = criterion(outputs, batch_y.float())
@@ -91,7 +105,7 @@ def run_train_hybrid_qcnn(config):
             y_true, y_pred, y_probs = [], [], []
             with torch.no_grad():
                 for batch_X, batch_y in val_loader:
-                    batch_X = batch_X.view(batch_X.size(0), -1).to(DEVICE)
+                    batch_X = batch_X.to(DEVICE)
                     preds_logits = model(batch_X).squeeze()
                     preds = (preds_logits >= 0.5).float()
                     y_true.extend(batch_y.tolist())
@@ -111,7 +125,7 @@ def run_train_hybrid_qcnn(config):
             writer.add_scalar("Accuracy/val", acc, epoch)
             writer.add_scalar("Precision/val", precision, epoch)
             writer.add_scalar("Recall/val", recall, epoch)
-            writer.add_scalar("BalancedAcc/val", bal_acc, epoch)
+            writer.add_scalar("BalancedAccuracy/val", bal_acc, epoch)
             writer.add_scalar("AUC/val", auc, epoch)
 
             wandb.log({
@@ -124,14 +138,19 @@ def run_train_hybrid_qcnn(config):
                 "val/auc": auc,
             })
 
-            write_log(log_file,
-                      f"[Epoch {epoch}] Loss: {val_loss:.4f} | F1: {f1:.4f} | Acc: {acc:.4f} | "
-                      f"BalAcc: {bal_acc:.4f} | AUC: {auc:.4f} | Prec: {precision:.4f} | Rec: {recall:.4f}")
+            write_log(
+                log_file,
+                f"[Epoch {epoch}] Loss: {val_loss:.4f} | F1: {f1:.4f} | Acc: {acc:.4f} | "
+                f"Balanced Accuracy: {bal_acc:.4f} | AUC: {auc:.4f} | Prec: {precision:.4f} | Rec: {recall:.4f}"
+            )
 
             loss_history.append(val_loss)
             f1_history.append(f1)
 
-            print(f"[Fold {fold}][Epoch {epoch}] Loss: {val_loss:.4f} | F1: {f1:.4f} | Acc: {acc:.4f}  | BalAcc: {bal_acc:.4f} | AUC: {auc:.4f}")
+            print(
+                f"[Fold {fold}][Epoch {epoch}] Loss: {val_loss:.4f} | F1: {f1:.4f} | "
+                f"Acc: {acc:.4f}  | Balanced Accuracy: {bal_acc:.4f} | AUC: {auc:.4f}"
+            )
 
             if f1 > best_f1:
                 best_f1, best_epoch = f1, epoch
@@ -168,7 +187,7 @@ def run_train_hybrid_qcnn(config):
             test_loader = DataLoader(test_dataset, batch_size=BATCH_SIZE)
             with torch.no_grad():
                 for batch_X, batch_y in test_loader:
-                    batch_X = batch_X.view(batch_X.size(0), -1).to(DEVICE)
+                    batch_X = batch_X.to(DEVICE)
                     preds_logits = model(batch_X).squeeze()
                     preds = (preds_logits >= 0.5).float()
                     y_test_true.extend(batch_y.tolist())
@@ -182,8 +201,15 @@ def run_train_hybrid_qcnn(config):
                 auc = float('nan')
             bal_acc = balanced_accuracy_score(y_test_true, y_test_pred)
 
-            print(f"[Fold {fold}] Test Accuracy: {acc:.4f} | F1: {f1:.4f} | Precision: {precision:.4f} | Recall: {recall:.4f} | AUC: {auc:.4f} | Balanced Acc: {bal_acc:.4f}")
-            write_log(log_file, f"\n[Fold {fold}] Test Accuracy: {acc:.4f} | F1: {f1:.4f} | Precision: {precision:.4f} | Recall: {recall:.4f} | AUC: {auc:.4f} | Balanced Acc: {bal_acc:.4f}")
+            print(
+                f"[Fold {fold}] Test Accuracy: {acc:.4f} | F1: {f1:.4f} | Precision: {precision:.4f} | "
+                f"Recall: {recall:.4f} | AUC: {auc:.4f} | Balanced Accuracy: {bal_acc:.4f}"
+            )
+            write_log(
+                log_file,
+                f"\n[Fold {fold}] Test Accuracy: {acc:.4f} | F1: {f1:.4f} | Precision: {precision:.4f} | "
+                f"Recall: {recall:.4f} | AUC: {auc:.4f} | Balanced Accuracy: {bal_acc:.4f}"
+            )
 
             wandb.log({
                 f"test/f1": f1,
