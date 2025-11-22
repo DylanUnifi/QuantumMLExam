@@ -6,7 +6,7 @@ dataset:
 
 training:
   batch_size: 32
-  epochs: 100
+  epochs: 50
   learning_rate: 0.0005
   kfold: 3
   early_stopping: 15
@@ -16,6 +16,6 @@ training:
     gamma: 0.5
 
 quantum:
-  n_qubits: 4
-  layers: 2
+  n_qubits: 8
+  layers: 3
   backend: "lightning.qubit"
