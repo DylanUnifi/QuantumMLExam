@@ -61,12 +61,6 @@ def run_train_svm(config):
     LOG_DIR = os.path.join(SAVE_DIR, "logs")
     os.makedirs(SAVE_DIR, exist_ok=True)
 
-    wandb.init(
-        project="qml_project",
-        name=EXPERIMENT_NAME,
-        config=config
-    )
-
     os.makedirs(LOG_DIR, exist_ok=True)
 
     batch_size = config.get("training", {}).get("batch_size", 256)
@@ -86,7 +80,6 @@ def run_train_svm(config):
     default_C = svm_cfg.get("default_C", 1.0)
     default_kernel = svm_cfg.get("default_kernel", "rbf")
     default_gamma = svm_cfg.get("default_gamma", "scale")
-    max_samples = svm_cfg.get("max_samples", 3000)
 
     log_path, log_file = init_logger(LOG_DIR, "svm")
     write_log(log_file, f"[SVM Training] Dataset: {dataset_name}, PCA: {use_pca} ({pca_components}), GPU: {use_gpu}\n")
@@ -97,9 +90,6 @@ def run_train_svm(config):
         binary_classes=binary_classes,
         grayscale=grayscale,
     )
-
-    indices = torch.randperm(len(train_dataset))[:max_samples]
-    train_dataset = Subset(train_dataset, indices)
 
     print(f"Nombre d'exemples chargés dans train_dataset : {len(train_dataset)}")
 
@@ -233,10 +223,3 @@ def run_train_svm(config):
         joblib.dump(study, os.path.join(SAVE_DIR, "optuna_study.pkl"))
     log_file.close()
     print("SVM training complete.")
-    wandb.finish()
-
-if __name__ == "__main__":
-    import yaml
-    with open("configs/config_train_svm_fashion.yaml", "r") as f:
-        config = yaml.safe_load(f)
-    run_train_svm(config)
