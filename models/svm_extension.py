@@ -5,28 +5,85 @@ from sklearn.base import BaseEstimator, ClassifierMixin
 import joblib
 import torch
 
+
 class EnhancedSVM(BaseEstimator, ClassifierMixin):
-    def __init__(self, C=1.0, kernel='rbf', gamma='scale', use_pca=False, pca_model=None, save_path=None, probability=False):
+    def __init__(
+        self,
+        C=1.0,
+        kernel='rbf',
+        gamma='scale',
+        use_pca=False,
+        pca_model=None,
+        scaler=None,
+        save_path=None,
+        probability=False,
+        auto_transform=True,
+        use_gpu=False,
+    ):
         self.C = C
         self.kernel = kernel
         self.gamma = gamma
         self.use_pca = use_pca
         self.pca_model = pca_model
+        self.scaler = scaler
         self.save_path = save_path or './enhanced_svm.pkl'
-        self.model = SVC(C=self.C, kernel=self.kernel, gamma=self.gamma, probability=probability)
+        self.auto_transform = auto_transform
+        self.use_gpu = use_gpu
+        self.probability = probability
+        self.xp = None
+        self.model = self._build_model()
+
+    def _build_model(self):
+        if self.use_gpu:
+            try:
+                import cupy as cp  # type: ignore
+                from cuml.svm import SVC as cuSVC  # type: ignore
+
+                self.xp = cp
+                return cuSVC(C=self.C, kernel=self.kernel, gamma=self.gamma, probability=self.probability)
+            except Exception as e:
+                print(f"[Warning] GPU SVM unavailable ({e}), falling back to CPU sklearn SVC.")
+
+        import numpy as np
+        self.xp = np
+        return SVC(C=self.C, kernel=self.kernel, gamma=self.gamma, probability=self.probability)
+
+    def _transform_input(self, X):
+        if not self.auto_transform:
+            return X
+        X_transformed = X
+        if self.scaler is not None:
+            X_transformed = self.scaler.transform(X_transformed)
+        if self.use_pca and self.pca_model is not None:
+            X_transformed = self.pca_model.transform(X_transformed)
+        if self.use_gpu and self.xp is not None:
+            try:
+                X_transformed = self.xp.asarray(X_transformed)
+            except Exception as e:
+                print(f"[Warning] Could not move data to GPU ({e}); continuing on CPU.")
+        return X_transformed
 
     def fit(self, X, y):
-        self.model.fit(X, y)
+        X_transformed = self._transform_input(X)
+        self.model.fit(X_transformed, y)
         return self
 
     def predict(self, X):
-        return self.model.predict(X)
+        X_transformed = self._transform_input(X)
+        preds = self.model.predict(X_transformed)
+        if hasattr(preds, "get"):
+            preds = preds.get()
+        return preds
 
     def predict_proba(self, X):
         """
         Retourne les probabilités (uniquement si probability=True au fit)
         """
-        return self.model.predict_proba(X)
+        X_transformed = self._transform_input(X)
+        probs = self.model.predict_proba(X_transformed)
+        if hasattr(probs, "get"):
+            probs = probs.get()
+        return probs
 
     def evaluate(self, X, y_true):
         y_pred = self.predict(X)

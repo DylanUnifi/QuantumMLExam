@@ -44,10 +44,12 @@ def run_train_quantum_mlp(config):
     PATIENCE = config["training"]["early_stopping"]
     SCHEDULER_TYPE = config.get("scheduler", None)
 
+    dataset_cfg = config.get("dataset", {})
     train_dataset, test_dataset = load_dataset_by_name(
-        name=config["dataset"]["name"],
+        name=dataset_cfg.get("name"),
         batch_size=BATCH_SIZE,
-        binary_classes=config.get("binary_classes", [0, 1])
+        binary_classes=dataset_cfg.get("binary_classes", [0, 1]),
+        grayscale=dataset_cfg.get("grayscale", config.get("model", {}).get("grayscale"))
     )
 
     indices = torch.randperm(len(train_dataset))[:500]
@@ -56,6 +58,25 @@ def run_train_quantum_mlp(config):
     print(f"Nombre d'exemples chargés dans train_dataset : {len(train_dataset)}")
 
     kfold = KFold(n_splits=KFOLD, shuffle=True, random_state=42)
+
+    def build_loader(dataset, shuffle=False, drop_last=False):
+        training_cfg = config.get("training", {})
+        num_workers = training_cfg.get("num_workers", 0)
+        pin_memory = training_cfg.get("pin_memory", False)
+        prefetch_factor = training_cfg.get("prefetch_factor", None)
+        persistent_workers = training_cfg.get("persistent_workers", False) if num_workers > 0 else False
+
+        loader_kwargs = {
+            "batch_size": BATCH_SIZE,
+            "shuffle": shuffle,
+            "drop_last": drop_last,
+            "num_workers": num_workers,
+            "pin_memory": pin_memory,
+            "persistent_workers": persistent_workers,
+        }
+        if prefetch_factor is not None and num_workers > 0:
+            loader_kwargs["prefetch_factor"] = prefetch_factor
+        return DataLoader(dataset, **loader_kwargs)
 
     for fold, (train_idx, val_idx) in enumerate(kfold.split(train_dataset)):
         print(f"[Fold {fold}] Starting Quantum MLP training...")
@@ -69,13 +90,24 @@ def run_train_quantum_mlp(config):
         train_subset = Subset(train_dataset, train_idx)
         val_subset = Subset(train_dataset, val_idx)
 
-        train_loader = DataLoader(train_subset, batch_size=BATCH_SIZE, shuffle=True, drop_last=True)
-        val_loader = DataLoader(val_subset, batch_size=BATCH_SIZE, drop_last=False)
+        train_loader = build_loader(train_subset, shuffle=True, drop_last=True)
+        val_loader = build_loader(val_subset)
 
         sample_X, _ = train_dataset[0]
         input_size = sample_X.numel()
 
-        model = QuantumResidualMLP(input_size=input_size).to(DEVICE)
+        model_hidden_sizes = config.get("model", {}).get("hidden_sizes", None)
+        quantum_cfg = config.get("quantum", {})
+        use_gpu = quantum_cfg.get("use_gpu", False)
+        model = QuantumResidualMLP(
+            input_size=input_size,
+            hidden_sizes=model_hidden_sizes,
+            n_qubits=quantum_cfg.get("n_qubits", 4),
+            n_layers=quantum_cfg.get("layers", 2),
+            backend=quantum_cfg.get("backend", "lightning.qubit"),
+            shots=quantum_cfg.get("shots", None),
+            use_gpu=use_gpu,
+        ).to(DEVICE)
         optimizer = optim.Adam(model.parameters(), lr=LR)
         scheduler = get_scheduler(optimizer, SCHEDULER_TYPE)
         criterion = nn.BCELoss()
@@ -135,7 +167,7 @@ def run_train_quantum_mlp(config):
             write_log(
                 log_file,
                 f"[Epoch {epoch}] Loss: {val_loss:.4f} | F1: {f1:.4f} | Acc: {acc:.4f} | "
-                f"BalAcc: {bal_acc:.4f} | AUC: {auc:.4f} | Prec: {precision:.4f} | Rec: {recall:.4f}"
+                f"Balanced Accuracy: {bal_acc:.4f} | AUC: {auc:.4f} | Prec: {precision:.4f} | Rec: {recall:.4f}"
             )
 
             loss_history.append(val_loss)
@@ -151,7 +183,10 @@ def run_train_quantum_mlp(config):
                 "val/auc": auc,
             })
 
-            print(f"[Fold {fold}][Epoch {epoch}] Loss: {val_loss:.4f} | F1: {f1:.4f} | BalAcc: {bal_acc:.4f} | AUC: {auc:.4f}")
+            print(
+                f"[Fold {fold}][Epoch {epoch}] Loss: {val_loss:.4f} | F1: {f1:.4f} | "
+                f"Acc: {acc:.4f} | Balanced Accuracy: {bal_acc:.4f} | AUC: {auc:.4f}"
+            )
 
             if f1 > best_f1:
                 best_f1 = f1
@@ -194,7 +229,7 @@ def run_train_quantum_mlp(config):
             model.eval()
             y_test_true, y_test_pred, y_test_probs = [], [], []
 
-            test_loader = DataLoader(test_dataset, batch_size=BATCH_SIZE, drop_last=False)
+            test_loader = build_loader(test_dataset)
             with torch.no_grad():
                 for batch_X, batch_y in test_loader:
                     batch_X, batch_y = batch_X.view(batch_X.size(0), -1).to(DEVICE), batch_y.to(DEVICE)
@@ -213,13 +248,13 @@ def run_train_quantum_mlp(config):
             bal_acc = balanced_accuracy_score(y_test_true, y_test_pred)
 
             print(
-                f"[Fold {fold}] Test Accuracy: {acc:.4f} | F1: {f1:.4f} | "
-                f"BalAcc: {bal_acc:.4f} | AUC: {auc:.4f} | Prec: {precision:.4f} | Rec: {recall:.4f}"
+                f"[Fold {fold}] Test Accuracy: {acc:.4f} | F1: {f1:.4f} | Precision: {precision:.4f} | "
+                f"Recall: {recall:.4f} | AUC: {auc:.4f} | Balanced Accuracy: {bal_acc:.4f}"
             )
             write_log(
                 log_file,
-                f"\n[Fold {fold}] Test Accuracy: {acc:.4f} | F1: {f1:.4f} | "
-                f"BalancedAcc: {bal_acc:.4f} | AUC: {auc:.4f} | Precision: {precision:.4f} | Recall: {recall:.4f}"
+                f"\n[Fold {fold}] Test Accuracy: {acc:.4f} | F1: {f1:.4f} | Precision: {precision:.4f} | "
+                f"Recall: {recall:.4f} | AUC: {auc:.4f} | Balanced Accuracy: {bal_acc:.4f}"
             )
 
             wandb.log({
