@@ -9,7 +9,7 @@ mkdir -p logs_cifar10
 echo "=============================="
 echo "Training Classical MLP..."
 echo "=============================="
-python main.py --model classical --config configs/config_train_classical_cifar10.yaml | tee logs_cifar10/classical.log
+python main.py --model classical_mlp --config configs/config_train_classical_mlp_cifar10.yaml | tee logs_cifar10/classical_mlp.log
 
 echo "=============================="
 echo "Training CNN..."
@@ -27,9 +27,9 @@ echo "=============================="
 python main.py --model hybrid_qcnn --config configs/config_train_qcnn_cifar10.yaml | tee logs_cifar10/hybrid_qcnn.log
 
 echo "=============================="
-echo "Training Hybrid QCNN + SVM..."
+echo "Training SVM + Quantum Kernel..."
 echo "=============================="
-python main.py --model hybrid_qcnn_svm --config configs/config_train_hybrid_qcnn_svm_cifar10.yaml | tee logs_cifar10/hybrid_qcnn_svm.log
+python main.py --model svm_qkernel --config configs/config_train_svm_qkernel_cifar10.yaml | tee logs_cifar10/svm_qkernel.log
 
 echo "=============================="
 echo "Training Classical SVM..."

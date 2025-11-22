@@ -9,7 +9,7 @@ mkdir -p logs_fashion
 echo "=============================="
 echo "Training Classical MLP..."
 echo "=============================="
-python main.py --model classical --config configs/config_train_classical_fashion.yaml | tee logs_fashion/classical.log
+python main.py --model classical_mlp --config configs/config_train_classical_mlp_fashion.yaml | tee logs_fashion/classical_mlp.log
 
 echo "=============================="
 echo "Training CNN..."
@@ -29,7 +29,7 @@ python main.py --model hybrid_qcnn --config configs/config_train_qcnn_fashion.ya
 echo "=============================="
 echo "Training Hybrid QCNN + SVM..."
 echo "=============================="
-python main.py --model hybrid_qcnn_svm --config configs/config_train_hybrid_qcnn_svm_fashion.yaml | tee logs_fashion/hybrid_qcnn_svm.log
+python main.py --model svm_qkernel --config configs/config_train_hybrid_qcnn_svm_fashion.yaml | tee logs_fashion/svm_qkernel.log
 
 echo "=============================="
 echo "Training Classical SVM..."
