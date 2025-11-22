@@ -1,5 +1,4 @@
 # train_quantum_mlp.py
-# Version: 1.3 – Ajout balanced accuracy, AUC, logs complets cohérents avec train_classical.
 
 import os
 import torch

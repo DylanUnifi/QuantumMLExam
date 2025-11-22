@@ -17,15 +17,15 @@ quantum:
 
 training:
   batch_size: 64
-  epochs: 20                # Nombre d'époques pour l'entraînement du feature extractor
-  learning_rate: 0.0005      # LR initial pour Adam
-  kfold: 3                   # Nombre de splits pour KFold cross-validation
-  early_stopping: 10          # Patience d'early stopping
+  epochs: 20                
+  learning_rate: 0.0005      
+  kfold: 3                   
+  early_stopping: 10          
   num_workers: 2
   pin_memory: true
   prefetch_factor: 2
   persistent_workers: true
-  scheduler: "StepLR"          # Options: null, StepLR, MultiStepLR, CosineAnnealingLR
+  scheduler: "StepLR"          
   scheduler_params:
     step_size: 10              
     gamma: 0.5                 
