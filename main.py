@@ -14,6 +14,7 @@ from train_classical_mlp import run_train_classical_mlp
 from train_cnn import run_train_cnn
 from train_hybrid_qcnn import run_train_hybrid_qcnn
 from train_svm import run_train_svm
+from train_svm_qkernel import run_train_svm_qkernel
 from train_quantum_mlp import run_train_quantum_mlp
 
 
@@ -81,6 +82,9 @@ def main():
         config.setdefault("svm", {})
         config["svm"]["optimize"] = args.optimize
         run_train_svm(config)
+        wandb.finish()
+    elif args.model == "svm_qkernel":
+        run_train_svm_qkernel(config)
         wandb.finish()
     else:
         raise ValueError(f"Unsupported model: {args.model}")

@@ -2,15 +2,16 @@ experiment_name: "svm_fashion_exp"
 
 dataset:
   name: fashion_mnist
+  binary_classes: [3, 8]  # Classe 3 contre 8 (modifiable selon ton objectif)
+  grayscale: true
 
 training:
   batch_size: 512
 
-binary_classes: [3, 8]  # Classe 3 contre 8 (modifiable selon ton objectif)
-
 svm:
   use_pca: false
   pca_components: 50
+  use_gpu: true
 
 optuna:
   n_trials: 30

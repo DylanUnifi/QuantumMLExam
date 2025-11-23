@@ -1,0 +1,27 @@
+# Version control
+.git
+.gitignore
+
+# Python caches
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+*.pkl
+
+# Training artifacts
+outputs/
+engine/checkpoints/
+wandb/
+*.pt
+*.onnx
+*.png
+*.jpg
+*.jpeg
+*.pdf
+*.svg
+
+# Local and misc files
+*.pptx
+.DS_Store
+.env
