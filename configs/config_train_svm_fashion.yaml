@@ -15,6 +15,12 @@ svm:
 
 optuna:
   n_trials: 30
+  kernel_options: ["rbf", "poly", "sigmoid"]
+  C_range: [0.001, 1000.0]
+  gamma_range: [0.0001, 10.0]
+  default_C: 1.0
+  default_kernel: "rbf"
+  default_gamma: "scale"
 
 checkpoint:
   save_dir: "checkpoints"
