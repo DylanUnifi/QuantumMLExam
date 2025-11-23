@@ -36,5 +36,5 @@ COPY . .
 
 ENV PYTHONPATH=/app
 
-# Default command shows available options; override with training command
-CMD ["python", "main.py", "--help"]
+# Default to an interactive shell so training commands can be launched manually
+CMD ["bash"]
