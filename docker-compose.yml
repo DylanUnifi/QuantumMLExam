@@ -8,12 +8,14 @@ services:
         TORCH_SPEC: ${TORCH_SPEC:-torch==2.3.1 torchvision==0.18.1}
     image: quantum-ml-exam
     working_dir: /app
-    command: ["python", "main.py", "--help"]
     environment:
       - PYTHONUNBUFFERED=1
+      - WANDB_MODE=online
     volumes:
       - ./:/app
       - ./outputs:/app/outputs
+    ports:
+      - "8888:8888"
 
   trainer-gpu:
     profiles: ["gpu"]
@@ -25,16 +27,15 @@ services:
         TORCH_SPEC: ${TORCH_SPEC:-torch==2.3.1+cu121 torchvision==0.18.1+cu121}
     image: quantum-ml-exam-gpu
     working_dir: /app
-    command: ["python", "main.py", "--help"]
     environment:
       - PYTHONUNBUFFERED=1
+      - WANDB_MODE=online
     volumes:
       - ./:/app
       - ./outputs:/app/outputs
-    deploy:
-      resources:
-        reservations:
-          devices:
-            - driver: nvidia
-              count: all
-              capabilities: [gpu]
+    device_requests:
+      - driver: nvidia
+        count: all
+        capabilities: [gpu]
+    ports:
+      - "8888:8888"

@@ -19,7 +19,7 @@ Datasets download automatically via `torchvision.datasets` during training.
 - **Training infrastructure**: YAML-driven configs, k-fold support, TensorBoard and Weights & Biases logging, checkpointing under `engine/checkpoints/`.
 
 ## 🚀 How to Run
-Clone and set up the environment:
+Clone and set up the environment (Python 3.12):
 ```bash
 git clone https://github.com/DylanUnifi/QuantumMLExam.git
 cd QuantumMLExam
@@ -33,7 +33,7 @@ pip install -r requirements.txt
 Build and run the project without installing dependencies locally. CPU-only image:
 ```bash
 docker build -t quantum-ml-exam .
-docker run --rm quantum-ml-exam
+docker run --rm -it quantum-ml-exam
 ```
 
 Use Docker Compose for repeatable runs and persisted outputs:
@@ -44,12 +44,16 @@ docker compose up --build trainer
 # GPU (requires NVIDIA Container Toolkit) — uses the CUDA base image and cu-enabled torch by default
 docker compose --profile gpu up --build trainer-gpu
 
-# Override the command
-docker compose run trainer python main.py --model hybrid_qcnn --config configs/config_train_hybrid_qcnn_fashion.yaml
+# Start an interactive shell (default CMD) with ports forwarded for Jupyter
+docker compose run --service-ports trainer
+
+# Launch Jupyter Lab inside the container
+docker compose run --service-ports trainer jupyter lab --ip=0.0.0.0 --port=8888 --no-browser
 ```
-Each YAML controls dataset settings (grayscale vs RGB, class subset), model hyperparameters (channels/hidden sizes, quantum qubits/layers, backend, shots), training knobs (epochs, early stopping), and data-loader performance flags (workers, pin memory, prefetch).
 
 GPU images rely on the `pytorch/pytorch:2.3.1-cuda12.1-cudnn8-runtime` base with CUDA wheels (`TORCH_SPEC`/`TORCH_INDEX_URL` build args). Customize these args in `docker-compose.yml` or via the command line to target different CUDA versions.
+
+The Compose services expose port `8888` for Jupyter, mount the repository for VS Code Remote - Containers, and default to a bash shell so you can start training commands manually. Weights & Biases logging is forced online (`WANDB_MODE=online`) to match cloud workflows.
 
 ### Batch runs across datasets
 Use the dataset launch helper to start Fashion-MNIST, CIFAR-10, and SVHN pipelines together. The script prefers tmux for parallel sessions and falls back to sequential execution if tmux is unavailable. You can force GPU selection per dataset and optionally activate a conda environment inside each session:

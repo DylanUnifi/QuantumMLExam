@@ -2,12 +2,18 @@ ARG BASE_IMAGE=python:3.12-slim
 FROM ${BASE_IMAGE}
 
 ENV PYTHONDONTWRITEBYTECODE=1 \
-    PYTHONUNBUFFERED=1
+    PYTHONUNBUFFERED=1 \
+    WANDB_MODE=online
 
-# System dependencies for PyTorch / PennyLane
+# System dependencies for PyTorch / PennyLane and image handling
 RUN apt-get update && apt-get install -y --no-install-recommends \
     git \
     libgomp1 \
+    libjpeg-dev \
+    zlib1g-dev \
+    libpng-dev \
+    libgl1 \
+    libglib2.0-0 \
     && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app
