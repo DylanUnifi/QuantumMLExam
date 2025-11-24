@@ -1,0 +1,23 @@
+# Core ML stack
+torch==2.3.1
+torchvision==0.18.1
+
+# Quantum computing
+pennylane==0.36.0
+pennylane-lightning==0.36.0
+
+# Training utilities
+scikit-learn==1.4.2
+optuna==3.6.1
+wandb==0.17.0
+tqdm==4.66.4
+matplotlib==3.8.4
+PyYAML==6.0.1
+joblib==1.4.2
+numpy==1.26.4
+Pillow==10.3.0
+imageio==2.34.0
+
+# Interactive tools
+jupyterlab==4.2.5
+ipykernel==6.29.5

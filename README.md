@@ -1,116 +1,105 @@
-
-````markdown
-````
 # Quantum Machine Learning: Binary Image Classification
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 
-This project systematically explores the **challenges and opportunities of Quantum Machine Learning (QML)** for binary classification tasks on standard image datasets, inspired by the review Challenges and Opportunities in Quantum Machine Learning (Cerezo et al., 2023).
-````
-````
-## 🧑‍🔬 Intent
+This repository compares classical and quantum approaches for **binary image classification (classes 3 vs 8)** on Fashion-MNIST, SVHN, and CIFAR-10. Models include classical MLPs and CNNs, hybrid quantum CNNs, quantum residual MLPs, and SVM baselines (standard and quantum-kernel variants). The goal is to study performance, trainability, and optimization challenges highlighted in *Challenges and Opportunities in Quantum Machine Learning* (Cerezo et al., 2023).
 
-- Evaluate classical and quantum models on binary classification of classes **3 vs 8** across three image datasets: Fashion-MNIST, SVHN, and CIFAR-10.
-- Analyze trainability, generalization, and performance gaps between classical MLPs, Quantum MLPs, and later CNNs.
-- Identify optimization difficulties like barren plateaus in QML and explore how inductive biases (e.g., convolutions) could improve future quantum models.
-````
-````
 ## 📂 Datasets
+- **Fashion-MNIST**: 28×28 grayscale (Dress vs Bag)
+- **SVHN**: 32×32 RGB (Digits 3 vs 8)
+- **CIFAR-10**: 32×32 RGB (Cat vs Ship)
 
-- **Fashion-MNIST**: 28×28 grayscale images of clothes (Dress vs Bag).
-- **SVHN**: 32×32 RGB images of street numbers (Digits 3 vs 8).
-- **CIFAR-10**: 32×32 RGB images of objects (Cat vs Ship).
+Datasets download automatically via `torchvision.datasets` during training.
 
-Datasets are automatically downloaded using `torchvision.datasets` during training.
-````
-````
-## 📊 Results Summary
+## 🧩 Models & Features
+- **Classical MLP / CNN**: configurable channel and hidden-layer depths, residual blocks, dropout, and metric logging (accuracy, balanced accuracy, precision/recall/F1, AUC).
+- **Hybrid QCNN**: convolutional stem feeding a PennyLane quantum layer with configurable qubits, layers, and differentiable backends (CPU or GPU lightning).
+- **Quantum Residual MLP**: classical embedding stack followed by a batch-aware quantum layer using PennyLane TorchLayer.
+- **SVM & Quantum-Kernel SVM**: scikit-learn SVC with optional Optuna search plus a precomputed-kernel variant driven by PennyLane state kernels; both support optional GPU acceleration and PCA/scaling persistence.
+- **Training infrastructure**: YAML-driven configs, k-fold support, TensorBoard and Weights & Biases logging, checkpointing under `engine/checkpoints/`.
 
-**Classical MLP**  
-- Fashion-MNIST: Mean F1 ≈ 0.987, ROC-AUC ≈ 0.998  
-- SVHN: Mean F1 ≈ 0.800, ROC-AUC ≈ 0.924  
-- CIFAR-10: Mean F1 ≈ 0.798, ROC-AUC ≈ 0.887
-````
-````
-**Quantum MLP**  
-- Fashion-MNIST: Mean F1 ≈ 0.639 (instability in one fold)  
-- SVHN: Mean F1 ≈ 0.852, Recall ≈ 0.99, Precision ≈ 0.75  
-- CIFAR-10: Mean F1 ≈ 0.67–0.70, high variability across runs  
-
-Results confirm **classical models' stability**, while **quantum models show promise but suffer optimization instabilities**, especially on complex datasets.
-````
-````
 ## 🚀 How to Run
-
-Clone this repository:
+Clone and set up the environment (Python 3.12):
 ```bash
-git clone https://github.com/DylanUnifi/QUANTUMMLEXAM.git
-cd QUANTUMMLEXAM
-````
-
-Set up your environment (recommend using conda):
-
-```bash
-conda qml_project create -f environment.yml
-conda activate qml_project
+git clone https://github.com/DylanUnifi/QuantumMLExam.git
+cd QuantumMLExam
+python -m venv .venv
+source .venv/bin/activate
+pip install --upgrade pip
+pip install -r requirements.txt
 ```
 
-Train a model (e.g., classical MLP on Fashion-MNIST):
-
+### Docker / Docker Compose
+Build and run the project without installing dependencies locally. CPU-only image:
 ```bash
-python train_classical.py --config configs/config_train_classical_fashion.yaml
+docker build -t quantum-ml-exam .
+docker run --rm -it quantum-ml-exam
 ```
 
-Train Quantum MLP on Fashion-MNIST:
+Use Docker Compose for repeatable runs and persisted outputs:
+```bash
+# CPU (default)
+docker compose up --build trainer
+
+# GPU (requires NVIDIA Container Toolkit) — uses the CUDA base image and cu-enabled torch by default
+docker compose --profile gpu up --build trainer-gpu
+
+# Start an interactive shell (default CMD) with ports forwarded for Jupyter
+docker compose run --service-ports trainer
+
+# Launch Jupyter Lab inside the container
+docker compose run --service-ports trainer jupyter lab --ip=0.0.0.0 --port=8888 --no-browser
+```
+
+GPU images rely on the `pytorch/pytorch:2.3.1-cuda12.1-cudnn8-runtime` base with CUDA wheels (`TORCH_SPEC`/`TORCH_INDEX_URL` build args). Customize these args in `docker-compose.yml` or via the command line to target different CUDA versions.
+
+The Compose services expose port `8888` for Jupyter, mount the repository for VS Code Remote - Containers, and default to a bash shell so you can start training commands manually. Weights & Biases logging is forced online (`WANDB_MODE=online`) to match cloud workflows.
+
+### Batch runs across datasets
+Use the dataset launch helper to start Fashion-MNIST, CIFAR-10, and SVHN pipelines together. The script prefers tmux for parallel sessions and falls back to sequential execution if tmux is unavailable. You can force GPU selection per dataset and optionally activate a conda environment inside each session:
 
 ```bash
+# optional: choose GPUs per dataset (defaults are 0)
+GPU_FASHION=0 GPU_CIFAR10=1 GPU_SVHN=2 \
+  # optional: activate a conda env in each tmux pane or sequential run
+  CONDA_ENV=qml-env \
+  bash launch_all_datasets.sh
+```
+
+If tmux is missing, the same environment activation prefix is reused for sequential runs, and a warning is printed.
+
+### Unified entrypoint
+Use `main.py` to launch any model with its config:
+```bash
+python main.py --model classical_mlp --config configs/config_train_classical_mlp_fashion.yaml
+python main.py --model cnn --config configs/config_train_cnn_svhn.yaml
+python main.py --model hybrid_qcnn --config configs/config_train_hybrid_qcnn_cifar10.yaml
+python main.py --model quantum_mlp --config configs/config_train_quantum_mlp_fashion.yaml
+python main.py --model svm --config configs/config_train_svm_fashion.yaml --optimize
+python main.py --model svm_qkernel --config configs/config_train_svm_qkernel_svhn.yaml
+```
+Each YAML controls dataset settings (grayscale vs RGB, class subset), model hyperparameters (channels/hidden sizes, quantum qubits/layers, backend, shots), training knobs (epochs, early stopping), and data-loader performance flags (workers, pin memory, prefetch).
+
+Quantum backends support GPU acceleration with automatic fallbacks: set `use_gpu: true` in the `quantum` (hybrid QCNN/quantum MLP) or `qkernel` (quantum SVM) sections to request `lightning.gpu`, and the code will drop to the CPU-accelerated `lightning.kokkos` device when CUDA is unavailable. SVM configs expose `use_gpu` for cuML-backed acceleration where available.
+
+### Direct script invocation
+Individual trainers remain available, e.g.:
+```bash
+python train_hybrid_qcnn.py --config configs/config_train_hybrid_qcnn_svhn.yaml
 python train_quantum_mlp.py --config configs/config_train_quantum_mlp_cifar10.yaml
 ```
 
-Evaluate trained models:
+## 📊 Example Results (mean over folds)
+- **Classical MLP**: Fashion-MNIST F1 ≈ 0.987 / AUC ≈ 0.998; SVHN F1 ≈ 0.800 / AUC ≈ 0.924; CIFAR-10 F1 ≈ 0.798 / AUC ≈ 0.887.
+- **Quantum MLP**: Fashion-MNIST F1 ≈ 0.639 (instability on one fold); SVHN F1 ≈ 0.852 (Recall ≈ 0.99, Precision ≈ 0.75); CIFAR-10 F1 ≈ 0.67–0.70 with higher variance.
 
-```bash
-python evaluate.py --checkpoint checkpoints/model_fold_0.pth --config configs/config_train_classical_fashion.yaml
-```
+These results illustrate the stability of classical models and the optimization sensitivity of quantum approaches on harder datasets.
 
-## 📑 Configuration System
-
-Training is entirely configuration-driven with YAML files in `configs/`, allowing you to modify:
-
-* **Dataset parameters**: input size, classes, normalization
-* **Model parameters**: architecture, depth, learning rate, batch size
-* **Training settings**: epochs, early stopping, k-fold cross-validation
-
-## 📈 Visualizations
-
-Training dynamics (loss, F1), confusion matrices, and quantum kernel matrices are saved automatically in `outputs/`.
-
-## 📸 Example Outputs
-
-Here’s a sample of training dynamics for the Quantum MLP on Fashion-MNIST:
-
-### F1-score progression
-
-![F1-score progression](outputs/f1_fold_0.png)
-
-### Training loss progression
-
-![Loss-score progression](outputs/loss_fold_0.png)
-
-These plots help diagnose convergence behavior and training stability across folds.
-
-## 📝 Citing
-
-If you use or build on this project, please cite:
-
-> Fouepe Dylan Berkamp, "Investigating Quantum Machine Learning Challenges through Binary Classification of Standard Image Datasets," 2025.
+## 📝 Outputs
+Training logs, TensorBoard traces, checkpoints, confusion matrices, and (for quantum kernels) kernel heatmaps are stored under `outputs/` and `engine/checkpoints/`. GPU usage, backend selection, and data-loader performance settings are all logged for reproducibility.
 
 ## 📜 License
-
 This project is licensed under the MIT License — see [LICENSE](LICENSE) for details.
 
-## 🙋 Questions?
-
-Feel free to open an [issue](https://github.com/yourusername/qml-binary-classification/issues) or contact me at [dylan.fouepe@edu.unifi.it](mailto:dylan.fouepe@edu.unifi.it).
-````
-
+## 🙋 Support
+Open an issue on GitHub or email [dylan.fouepe@edu.unifi.it](mailto:dylan.fouepe@edu.unifi.it) for questions or contributions.
