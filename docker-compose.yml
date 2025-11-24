@@ -1,11 +1,9 @@
-version: "3.9"
-
 services:
   trainer:
     build:
       context: .
       args:
-        BASE_IMAGE: ${BASE_IMAGE:-python:3.10-slim}
+        BASE_IMAGE: ${BASE_IMAGE:-python:3.12-slim}
         TORCH_INDEX_URL: ${TORCH_INDEX_URL:-https://download.pytorch.org/whl/cpu}
         TORCH_SPEC: ${TORCH_SPEC:-torch==2.3.1 torchvision==0.18.1}
     image: quantum-ml-exam
