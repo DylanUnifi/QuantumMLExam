@@ -1,5 +1,4 @@
 # models/classical.py
-# Version: 3.0 - MLP Residual Inspired
 
 import torch
 import torch.nn as nn
