@@ -1,11 +1,14 @@
-# Light CUDA image (compatible GPU25, Solaris, laptop)
-FROM nvidia/cuda:12.4.1-runtime-ubuntu22.04
+# Full DEVEL CUDA image (required for CuPy & nvrtc kernels)
+FROM nvidia/cuda:12.4.1-devel-ubuntu22.04
 
 ENV DEBIAN_FRONTEND=noninteractive
 ENV PYTHONUNBUFFERED=1
 
+# ----------------------------------------------------
+# Base system + Python
+# ----------------------------------------------------
 RUN apt-get update && apt-get install -y --no-install-recommends \
-    python3 python3-pip python3-venv python3-dev \
+    python3 python3-pip python3-dev python3-venv \
     git libgomp1 libgl1 libglib2.0-0 libjpeg-dev zlib1g-dev libpng-dev \
     && rm -rf /var/lib/apt/lists/*
 
@@ -15,19 +18,26 @@ RUN pip install --upgrade pip
 COPY requirements.txt .
 
 # ----------------------------------------------------
-#  PyTorch light-nightly WITHOUT CUDA libraries
-#  -> avoids downloading 3–6 GB of dependencies
+# PyTorch NIGHTLY for CUDA 13.0 (Blackwell support)
 # ----------------------------------------------------
 RUN pip install --no-cache-dir --pre torch torchvision \
     --index-url https://download.pytorch.org/whl/nightly/cu130
 
-# CuPy (CUDA 12.x) – ultra compatible, ultra léger
+# ----------------------------------------------------
+# CuPy (requires DEVEL image → OK)
+# ----------------------------------------------------
 RUN pip install --no-cache-dir cupy-cuda12x
 
-# PennyLane GPU backend
-RUN pip install --no-cache-dir pennylane pennylane-lightning[gpu]
+# ----------------------------------------------------
+# PennyLane + Lightning GPU backend
+# ----------------------------------------------------
+RUN pip install --no-cache-dir \
+    pennylane \
+    pennylane-lightning[gpu]
 
-# Project deps
+# ----------------------------------------------------
+# Project dependencies
+# ----------------------------------------------------
 RUN pip install --no-cache-dir -r requirements.txt || true
 
 COPY . .
