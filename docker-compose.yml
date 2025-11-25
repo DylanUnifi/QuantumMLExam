@@ -14,3 +14,19 @@ services:
       - ./outputs:/app/outputs
     working_dir: /app
     command: bash
+
+  trainer-gpu25:
+    build:
+      context: .
+      dockerfile: Dockerfile.gpu25
+    image: quantum-ml-exam-gpu25
+    runtime: nvidia
+    environment:
+      - NVIDIA_VISIBLE_DEVICES=all
+      - NVIDIA_DRIVER_CAPABILITIES=compute,utility
+      - PYTHONUNBUFFERED=1
+    volumes:
+      - ./:/app
+      - ./outputs:/app/outputs
+    working_dir: /app
+    command: bash
