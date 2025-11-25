@@ -26,7 +26,7 @@ RUN pip install --no-cache-dir --pre torch torchvision \
 # ----------------------------------------------------
 # CuPy (requires DEVEL image → OK)
 # ----------------------------------------------------
-RUN pip install --no-cache-dir cupy-cuda1x
+RUN pip install --no-cache-dir cupy-cuda12x
 
 # ----------------------------------------------------
 # PennyLane + Lightning GPU backend

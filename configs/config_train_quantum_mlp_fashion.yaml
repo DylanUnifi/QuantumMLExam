@@ -16,8 +16,8 @@ quantum:
   use_gpu: true
 
 training:
-  batch_size: 64
-  epochs: 20                # Nombre d'époques pour l'entraînement du feature extractor
+  batch_size: 128
+  epochs: 30                # Nombre d'époques pour l'entraînement du feature extractor
   learning_rate: 0.0005      # LR initial pour Adam
   kfold: 3                   # Nombre de splits pour KFold cross-validation
   early_stopping: 10          # Patience d'early stopping
@@ -33,9 +33,3 @@ training:
 checkpoint:
   save_dir: "checkpoints"
   subdir: "fashion_mnist_quantum_mlp"
-
-quantum:
-  n_qubits: 4
-  layers: 2
-  backend: "lightning.qubit"
-  use_gpu: true

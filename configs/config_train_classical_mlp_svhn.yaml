@@ -11,7 +11,7 @@ model:
 
 training:
   batch_size: 128
-  epochs: 50
+  epochs: 40
   learning_rate: 0.0005
   kfold: 3
   early_stopping: 15

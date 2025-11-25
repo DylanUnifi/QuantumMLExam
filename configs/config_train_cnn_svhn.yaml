@@ -10,9 +10,9 @@ model:
   grayscale: false   
 
 training:
-  batch_size: 64
-  epochs: 50
-  learning_rate: 0.001
+  batch_size: 128
+  epochs: 40
+  learning_rate: 0.0005
   kfold: 3
   early_stopping: 15
   scheduler: "none"

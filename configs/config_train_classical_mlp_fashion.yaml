@@ -11,10 +11,10 @@ model:
 
 training:
   batch_size: 128
-  epochs: 20
+  epochs: 15
   learning_rate: 0.001
   kfold: 3
-  early_stopping: 10
+  early_stopping: 5
   scheduler: "none"                
 
 checkpoint:

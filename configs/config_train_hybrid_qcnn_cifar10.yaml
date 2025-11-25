@@ -16,11 +16,11 @@ quantum:
   use_gpu: true
 
 training:
-  batch_size: 32
-  epochs: 50
+  batch_size: 128
+  epochs: 100
   learning_rate: 0.0005
   kfold: 3
-  early_stopping: 15
+  early_stopping: 30
   num_workers: 2
   pin_memory: true
   prefetch_factor: 2

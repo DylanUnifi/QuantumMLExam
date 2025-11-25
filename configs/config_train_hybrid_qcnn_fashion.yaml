@@ -16,7 +16,7 @@ quantum:
   use_gpu: true
 
 training:
-  batch_size: 64
+  batch_size: 128
   epochs: 20                
   learning_rate: 0.0005
   kfold: 3
