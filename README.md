@@ -71,12 +71,12 @@ If tmux is missing, the same environment activation prefix is reused for sequent
 ### Unified entrypoint
 Use `main.py` to launch any model with its config:
 ```bash
-python main.py --model classical_mlp --config configs/config_train_classical_mlp_fashion.yaml
-python main.py --model cnn --config configs/config_train_cnn_svhn.yaml
-python main.py --model hybrid_qcnn --config configs/config_train_hybrid_qcnn_cifar10.yaml
-python main.py --model quantum_mlp --config configs/config_train_quantum_mlp_fashion.yaml
-python main.py --model svm --config configs/config_train_svm_fashion.yaml --optimize
-python main.py --model svm_qkernel --config configs/config_train_svm_qkernel_svhn.yaml
+python3 main.py --model classical_mlp --config configs/config_train_classical_mlp_fashion.yaml
+python3 main.py --model cnn --config configs/config_train_cnn_svhn.yaml
+python3 main.py --model hybrid_qcnn --config configs/config_train_hybrid_qcnn_cifar10.yaml
+python3 main.py --model quantum_mlp --config configs/config_train_quantum_mlp_fashion.yaml
+python3 main.py --model svm --config configs/config_train_svm_fashion.yaml --optimize
+python3 main.py --model svm_qkernel --config configs/config_train_svm_qkernel_svhn.yaml
 ```
 Each YAML controls dataset settings (grayscale vs RGB, class subset), model hyperparameters (channels/hidden sizes, quantum qubits/layers, backend, shots), training knobs (epochs, early stopping), and data-loader performance flags (workers, pin memory, prefetch).
 
