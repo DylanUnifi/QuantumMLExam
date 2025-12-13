@@ -19,40 +19,41 @@ from utils.metrics import log_metrics
 import wandb
 
 
+# --- BLOCK 1: Version corrigée de build_kernel_fn (lignes 28-69) ---
+
 def build_kernel_fn(n_wires: int, n_layers: int, rotation: str = "Y", device_name: str = "default.qubit", theta=None):
     register_a = list(range(n_wires))
     register_b = list(range(n_wires, 2 * n_wires))
     ancilla = 2 * n_wires
     dev = qml.device(device_name, wires=2 * n_wires + 1)
     
-    # Initialize theta if not provided
+    # Initialize theta (2 paramètres globaux pour l'exemple)
     if theta is None:
-        theta = np.zeros(n_layers)
+        theta = np.zeros(2)
 
-    def _embed_and_entangle(x, wires, theta_val): # theta_val est introduit ici
-        if rotation == "X":
-            qml.RX(theta_val, wires=wires)
-        elif rotation == "Y":
-            qml.RY(theta_val, wires=wires)
-        elif rotation == "Z":
-            qml.RZ(theta_val, wires=wires)
-
+    def _embed_and_entangle(x, wires, theta_val):
+        
+        # Encodes les données
         qml.AngleEmbedding(x, wires=wires, rotation=rotation)
+        
         for _ in range(n_layers):
+            # Couche d'Entrelacement
             for i, w in enumerate(wires):
                 qml.CZ(wires=[w, wires[(i + 1) % len(wires)]])
-            # La rotation globale entraînables (RY sur toutes les qubits de la couche)
+            
+            # --- Rotation Globale Trainable (appliquée à chaque wire individuellement) ---
             for w in wires:
-                qml.RY(theta_val, wires=w)
+                qml.RY(theta_val, wires=w) # <-- C'EST LA LIGNE CORRECTE
+            # -------------------------------------------------------------------------
+            
+            # Ré-Encodage des données (comme dans le circuit d'origine)
             qml.AngleEmbedding(x, wires=wires, rotation=rotation)
 
     @qml.qnode(dev)
-    def swap_test_kernel(x, y, theta): # theta est passé au QNode
-        # Applique la rotation globale avant l'encodage
-        
-        # Le premier argument de theta est la rotation globale avant l'encodage
+    def swap_test_kernel(x, y, theta):
+        # theta[0] pour le premier registre (x), theta[1] pour le second (y)
         _embed_and_entangle(x, register_a, theta[0]) 
-        _embed_and_entangle(y, register_b, theta[1] if len(theta) > 1 else theta[0])
+        _embed_and_entangle(y, register_b, theta[1])
 
         qml.Hadamard(wires=ancilla)
         for i in range(n_wires):
@@ -62,13 +63,11 @@ def build_kernel_fn(n_wires: int, n_layers: int, rotation: str = "Y", device_nam
         return qml.expval(qml.Projector([0], wires=ancilla))
 
     def fidelity_kernel(x, y):
-        # Pour une implémentation simplifiée et contrôlée:
-        # Nous allons faire en sorte que theta soit toujours passé
         prob_zero = swap_test_kernel(x, y, theta) 
         return 2 * prob_zero - 1
 
     return fidelity_kernel
-
+# --- FIN BLOCK 1 CORRIGÉ ---
 
 # --- Fonction d'optimisation du Kernel Alignment ---
 def optimize_theta_alignment(X, y, kernel_builder, n_layers, steps=5, lr=0.05, desc="Optimizing Theta"):
