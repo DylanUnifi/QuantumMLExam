@@ -32,7 +32,19 @@ def run_train_cnn(config):
     CHECKPOINT_DIR = os.path.join(SAVE_DIR, "folds")
     os.makedirs(CHECKPOINT_DIR, exist_ok=True)
 
-    DEVICE = torch.device("xpu" if torch.xpu.is_available() else "cpu")
+    if torch.cuda.is_available():
+        # 1. Option la plus rapide : NVIDIA CUDA
+        DEVICE = torch.device("cuda")
+        print("Utilisation du périphérique: CUDA (NVIDIA)")
+    elif hasattr(torch, 'xpu') and torch.xpu.is_available():
+        # 2. Option intermédiaire : Intel XPU (Arc, Xe)
+        DEVICE = torch.device("xpu")
+        print("Utilisation du périphérique: XPU (Intel)")
+    else:
+        # 3. Option de dernier recours : CPU
+        DEVICE = torch.device("cpu")
+        print("Utilisation du périphérique: CPU (Générique)")
+        
     BATCH_SIZE = config["training"]["batch_size"]
     EPOCHS = config["training"]["epochs"]
     LR = config["training"]["learning_rate"]
