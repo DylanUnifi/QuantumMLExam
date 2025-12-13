@@ -17,13 +17,30 @@ from train_svm import run_train_svm
 from train_svm_qkernel import run_train_svm_qkernel
 from train_quantum_mlp import run_train_quantum_mlp
 
+import intel_extension_for_pytorch as ipex 
 
 def set_seed(seed):
+    # 1. Setting seeds for standard libraries (Python, NumPy)
     torch.manual_seed(seed)
     np.random.seed(seed)
     random.seed(seed)
+    
+    # 2. Setting seeds for NVIDIA GPUs (CUDA)
     if torch.cuda.is_available():
         torch.cuda.manual_seed_all(seed)
+        
+    # 3. Setting seeds for Intel GPUs (XPU)
+    # Nous vérifions si l'attribut 'xpu' existe et si un XPU est disponible
+    if hasattr(torch, 'xpu') and torch.xpu.is_available():
+        try:
+            # torch.xpu.manual_seed_all() est la méthode spécifique pour XPU
+            torch.xpu.manual_seed_all(seed)
+        except AttributeError:
+            # Fallback si la méthode spécifique n'est pas encore implémentée ou disponible
+            print("[Warning] La fonction torch.xpu.manual_seed_all() n'est pas disponible. Reproductibilité XPU limitée.")
+            torch.manual_seed(seed) # Utiliser la méthode CPU/standard comme fallback
+
+
 
 
 def main():

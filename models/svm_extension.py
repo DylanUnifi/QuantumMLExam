@@ -35,6 +35,7 @@ class EnhancedSVM(BaseEstimator, ClassifierMixin):
         self.model = self._build_model()
 
     def _build_model(self):
+        # --- Priorité 1: Tenter CUDA (NVIDIA cuML/cuPy) si use_gpu=True ---
         if self.use_gpu:
             try:
                 import cupy as cp  # type: ignore
@@ -42,13 +43,30 @@ class EnhancedSVM(BaseEstimator, ClassifierMixin):
 
                 self.xp = cp
                 self._xp_module_name = 'cupy'
+                print("[INFO] SVM: Utilisation du GPU CUDA (cuML).")
                 return cuSVC(C=self.C, kernel=self.kernel, gamma=self.gamma, probability=self.probability)
             except Exception as e:
-                print(f"[Warning] GPU SVM unavailable ({e}), falling back to CPU sklearn SVC.")
+                # Afficher l'avertissement et passer à la prochaine priorité
+                print(f"[Warning] GPU SVM CUDA (cuML) indisponible ({e}).")
 
+        # --- Priorité 2: Tenter l'accélération Intel/Optimisation XPU/CPU (sklearnex) ---
+        try:
+            from sklearnex import patch_sklearn, unpatch_sklearn
+            # S'assurer qu'aucun autre patch n'interfère, puis appliquer le patch Intel
+            unpatch_sklearn()
+            patch_sklearn()
+            print("[INFO] SVM: Utilisation de Scikit-learn accéléré par Intel (sklearnex).")
+        except ImportError:
+            print("[INFO] SVM: sklearnex non trouvé. Utilisation de Scikit-learn standard.")
+            # Si sklearnex n'est pas installé, la logique passe au Scikit-learn standard.
+            pass
+
+        # --- Priorité 3: CPU standard ou optimisé par Intel (si patch_sklearn a réussi) ---
         import numpy as np
         self.xp = np
         self._xp_module_name = 'numpy'
+        
+        # SVC ici sera soit le SVC standard, soit le SVC patché par sklearnex
         return SVC(C=self.C, kernel=self.kernel, gamma=self.gamma, probability=self.probability)
 
     def _transform_input(self, X):
