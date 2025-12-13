@@ -20,6 +20,10 @@ qkernel:
   max_samples: 2000
   C: 2.0
   kernel_workers: 4
+  # --- Nouveaux paramètres pour le kernel semi-apprenable ---
+  trainable_kernel: true
+  opt_steps: 5
+  opt_lr: 0.05
 
 checkpoint:
   save_dir: "checkpoints"
