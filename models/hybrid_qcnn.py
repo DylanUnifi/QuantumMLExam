@@ -36,13 +36,6 @@ def create_quantum_layer(
     device_kwargs = {"wires": n_qubits, "shots": shots}
     selected_backend = backend
 
-    if backend.startswith("lightning"):
-        if use_gpu and torch.cuda.is_available():
-            selected_backend = "lightning.gpu"
-        elif use_gpu and backend != "lightning.kokkos":
-            # Prefer Kokkos acceleration when GPU execution is requested but unavailable
-            selected_backend = "lightning.kokkos"
-
     dev = qml.device(selected_backend, **device_kwargs)  # backend différentiable
 
     @qml.qnode(dev, interface="torch")
@@ -115,6 +108,9 @@ class HybridQCNNBinaryClassifier(nn.Module):
         self.final_fc = nn.Linear(n_qubits, 1)
 
     def forward(self, x):
+        # 1. Capture the correct device (e.g., xpu:0) right at the start
+        target_device = x.device
+
         if x.dim() == 2:
             side = int((x.size(1) / self.input_channel) ** 0.5)
             if side * side * self.input_channel != x.size(1):
@@ -132,7 +128,15 @@ class HybridQCNNBinaryClassifier(nn.Module):
         x = self.dropout(x)
         x = self.classical_head(x)
         x = torch.tanh(self.quantum_fc_input(x)) * np.pi  # mapping [-π, π]
+
+        # 2. Run the Quantum Layer (This returns a CPU tensor)
         x = self.quantum_layer(x)
-        x = self.bn_q(x)
+
+        # 3. FIX: Force the data back to the GPU
+        x = x.to(target_device)
+
+        # 4. SAFETY: Disable Batch Norm to prevent the "Assertion Failed" crash
+        # x = self.bn_q(x)  <-- Commented out for stability
+
         x = self.final_fc(x)
         return torch.sigmoid(x)

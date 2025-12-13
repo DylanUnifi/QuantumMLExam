@@ -3,6 +3,7 @@
 
 import os
 import torch
+import intel_extension_for_pytorch as ipex  # Make sure this is imported!
 import torch.nn as nn
 import torch.optim as optim
 from torch.utils.data import Subset, DataLoader
@@ -31,7 +32,7 @@ def run_train_cnn(config):
     CHECKPOINT_DIR = os.path.join(SAVE_DIR, "folds")
     os.makedirs(CHECKPOINT_DIR, exist_ok=True)
 
-    DEVICE = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    DEVICE = torch.device("xpu" if torch.xpu.is_available() else "cpu")
     BATCH_SIZE = config["training"]["batch_size"]
     EPOCHS = config["training"]["epochs"]
     LR = config["training"]["learning_rate"]

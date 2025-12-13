@@ -36,14 +36,6 @@ class QuantumLayer(nn.Module):
 
         device_kwargs = {"wires": n_qubits, "shots": shots}
         selected_backend = backend
-
-        if backend.startswith("lightning"):
-            if use_gpu and torch.cuda.is_available():
-                selected_backend = "lightning.gpu"
-            elif use_gpu and backend != "lightning.kokkos":
-                # leverage Kokkos as a CPU-accelerated fallback when GPU is requested but unavailable
-                selected_backend = "lightning.kokkos"
-
         self.dev = qml.device(selected_backend, **device_kwargs)  # backend différentiable
 
         @qml.qnode(self.dev, interface="torch")
@@ -103,9 +95,23 @@ class QuantumResidualMLP(nn.Module):
         self.fc = nn.Linear(n_qubits, 1)
 
     def forward(self, x):
+        # 1. Capture the correct device
+        target_device = x.device
+
         for block in self.blocks:
             x = block(x)
+        
         x = self.dropout(x)
+        
+        # 2. Run Quantum Layer (Returns CPU tensor)
         x = self.quantum(x)
-        x = self.bn_q(x)
-        return torch.sigmoid(self.fc(x))
+
+        # 3. Move back to GPU
+        x = x.to(target_device)
+
+        # 4. DISABLE BATCH NORM (The cause of the crash)
+        # x = self.bn_q(x)  <-- Comment this out with a hash symbol #
+
+        # 5. Output with clamping for extra safety
+        x = torch.sigmoid(self.fc(x))
+        return torch.clamp(x, min=1e-7, max=1.0 - 1e-7)

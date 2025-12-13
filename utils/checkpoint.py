@@ -3,7 +3,13 @@
 
 import os
 import torch
-from torch.serialization import add_safe_globals
+import torch
+# Try to import add_safe_globals, otherwise define a dummy function
+try:
+    from torch.serialization import add_safe_globals
+except ImportError:
+    def add_safe_globals(globals_list):
+        pass  # Do nothing if the function doesn't exist
 import numpy as np
 
 def save_checkpoint(model, optimizer, epoch, checkpoint_dir, fold, best_f1):

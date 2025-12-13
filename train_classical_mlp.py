@@ -2,6 +2,7 @@
 
 import os
 import torch
+import intel_extension_for_pytorch as ipex  # Make sure this is imported!
 import torch.nn as nn
 import torch.optim as optim
 from sklearn.model_selection import KFold
@@ -30,7 +31,7 @@ def run_train_classical_mlp(config):
     SAVE_DIR = os.path.join("engine/checkpoints", "classical", EXPERIMENT_NAME)
     CHECKPOINT_DIR = os.path.join(SAVE_DIR, "folds")
 
-    DEVICE = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    DEVICE = torch.device("xpu" if torch.xpu.is_available() else "cpu")
     BATCH_SIZE = config["training"]["batch_size"]
     EPOCHS = config["training"]["epochs"]
     LR = config["training"]["learning_rate"]

@@ -2,6 +2,7 @@
 
 import os
 import torch
+import intel_extension_for_pytorch as ipex  # Make sure this is imported!
 import torch.nn as nn
 import torch.optim as optim
 from sklearn.model_selection import KFold
@@ -28,7 +29,7 @@ def run_train_hybrid_qcnn(config):
     SAVE_DIR = os.path.join("engine/checkpoints", "hybrid_qcnn", EXPERIMENT_NAME)
     CHECKPOINT_DIR = os.path.join(SAVE_DIR, "folds")
 
-    DEVICE = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    DEVICE = torch.device("xpu" if torch.xpu.is_available() else "cpu")
     BATCH_SIZE = config["training"]["batch_size"]
     EPOCHS = config["training"]["epochs"]
     LR = config["training"]["learning_rate"]
@@ -53,7 +54,15 @@ def run_train_hybrid_qcnn(config):
         grayscale=dataset_cfg.get("grayscale", config.get("model", {}).get("grayscale"))
     )
 
-    print(f"Nombre d'exemples chargés dans train_dataset : {len(train_dataset)}")
+    full_train_dataset = train_dataset
+
+    # --- NEW: SUBSETTING FOR QUANTUM TRAINING ---
+    # Select only the first 500 images for faster training
+    subset_size = 500 
+    train_dataset = torch.utils.data.Subset(full_train_dataset, indices=range(subset_size))
+
+    print(f"Dataset subset created: {len(train_dataset)} samples (Original: {len(full_train_dataset)})")
+    # --------------------------------------------
 
     kfold = KFold(n_splits=KFOLD, shuffle=True, random_state=42)
 

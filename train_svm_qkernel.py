@@ -163,9 +163,15 @@ def run_train_svm_qkernel(config):
         grayscale=grayscale,
     )
 
-    #indices = torch.randperm(len(train_dataset))[:max_samples]
-    #train_dataset = Subset(train_dataset, indices)
-    print(f"Nombre d'exemples chargés dans train_dataset : {len(train_dataset)}")
+    full_train_dataset = train_dataset
+    # --- CRITICAL FIX FOR QUANTUM SVM ---
+    # Use a very small subset because QSVM is O(N^2)
+    subset_size = 500  # <--- KEEP THIS SMALL (100-300 max)
+    indices = torch.randperm(len(full_train_dataset))[:subset_size]
+    train_dataset = torch.utils.data.Subset(full_train_dataset, indices)
+
+    print(f"QSVM Subset created: {len(train_dataset)} samples.")
+    # ------------------------------------
 
     X_raw, y_raw = prepare_features(train_dataset, batch_size=batch_size)
 
