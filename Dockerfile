@@ -18,10 +18,10 @@ RUN pip install --upgrade pip
 COPY requirements.txt .
 
 # ----------------------------------------------------
-# PyTorch NIGHTLY for CUDA 13.0 (Blackwell support)
+# PyTorch NIGHTLY for CUDA 12.8 (Blackwell support)
 # ----------------------------------------------------
 RUN pip install --no-cache-dir --pre torch torchvision \
-    --index-url https://download.pytorch.org/whl/nightly/cu130
+    --index-url https://download.pytorch.org/whl/nightly/cu128
 
 # ----------------------------------------------------
 # CuPy (requires DEVEL image → OK)
