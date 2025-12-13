@@ -52,32 +52,47 @@ def build_kernel_fn(n_wires: int, n_layers: int, rotation: str = "Y", device_nam
     return fidelity_kernel
 
 
+
 def select_device_name(qkernel_cfg, n_wires: int, total_wires: int):
     base_device = qkernel_cfg.get("device", "default.qubit")
     use_gpu = qkernel_cfg.get("use_gpu", False)
-    gpu_device = qkernel_cfg.get("gpu_device", "lightning.gpu")
-    kokkos_device = qkernel_cfg.get("kokkos_device", "lightning.kokkos")
+    cuda_device = qkernel_cfg.get("cuda_device", "lightning.gpu") # Pour NVIDIA
+    
+    # Définir le simulateur C++ générique rapide comme prochaine priorité
+    lightning_cpu_device = "lightning.qubit"
 
     if not use_gpu:
+        print(f"[Info] GPU non demandé, utilisation du simulateur de base: {base_device}")
         return base_device
 
+    # --- 1. Tenter CUDA (NVIDIA) ---
     if torch.cuda.is_available():
         try:
-            qml.device(gpu_device, wires=total_wires)
-            print(f"[Info] Using GPU-backed PennyLane device: {gpu_device}")
-            return gpu_device
-        except Exception as exc:  # pragma: no cover - backend availability depends on environment
-            print(f"[Warning] Could not create GPU device '{gpu_device}' ({exc}); trying kokkos fallback...")
+            # Vérifie si le simulateur GPU PennyLane fonctionne
+            qml.device(cuda_device, wires=total_wires)
+            print(f"[Info] Utilisation du simulateur GPU CUDA: {cuda_device}")
+            return cuda_device
+        except Exception as exc:
+            print(f"[Warning] Le simulateur CUDA '{cuda_device}' a échoué ({exc}); tentative de fallback...")
     else:
-        print("[Warning] GPU requested for qkernel but CUDA is not available; trying kokkos fallback...")
+        print("[Warning] GPU demandé, mais CUDA (NVIDIA) non disponible.")
 
+    # --- 2. Tenter XPU (Intel) ---
+    # La détection XPU nous fait sauter directement au simulateur CPU C++ rapide
+    if hasattr(torch, 'xpu') and torch.xpu.is_available():
+        print("[Info] Périphérique XPU Intel détecté. Tentative de simulateur CPU C++ rapide.")
+        
+    # --- 3. Tenter lightning.qubit (Simulateur C++ rapide générique) ---
     try:
-        qml.device(kokkos_device, wires=total_wires)
-        print(f"[Info] Using CPU-accelerated PennyLane device: {kokkos_device}")
-        return kokkos_device
-    except Exception as exc:  # pragma: no cover - backend availability depends on environment
-        print(f"[Warning] Could not create kokkos device '{kokkos_device}' ({exc}); falling back to {base_device}.")
-        return base_device
+        # Tente le simulateur C++ rapide et stable
+        qml.device(lightning_cpu_device, wires=total_wires)
+        print(f"[Info] Utilisation du simulateur CPU C++ rapide: {lightning_cpu_device}")
+        return lightning_cpu_device
+    except Exception as exc:
+        print(f"[Warning] Le simulateur {lightning_cpu_device} a échoué ({exc}); fallback vers {base_device}.")
+        
+    # --- 4. Fallback Final (default.qubit) ---
+    return base_device
 
 
 def _compute_kernel_row(x_row, X_ref, kernel_fn):
@@ -166,7 +181,7 @@ def run_train_svm_qkernel(config):
     full_train_dataset = train_dataset
     # --- CRITICAL FIX FOR QUANTUM SVM ---
     # Use a very small subset because QSVM is O(N^2)
-    subset_size = 500  # <--- KEEP THIS SMALL (100-300 max)
+    subset_size = 200  # <--- KEEP THIS SMALL (100-300 max)
     indices = torch.randperm(len(full_train_dataset))[:subset_size]
     train_dataset = torch.utils.data.Subset(full_train_dataset, indices)
 
