@@ -228,14 +228,35 @@ def run_train_svm_qkernel(config):
     n_layers = qkernel_cfg.get("n_layers", 2)
     rotation = qkernel_cfg.get("rotation", "Y")
     total_wires = 2 * n_wires + 1
+    # 1. D'abord, on sélectionne le device (cette fonction gère déjà le fallback CPU si pas de GPU)
     device_name = select_device_name(qkernel_cfg, n_wires, total_wires)
+    
+    # ... (autres paramètres) ...
     use_pca = qkernel_cfg.get("use_pca", True)
     pca_components = qkernel_cfg.get("pca_components", n_wires)
     max_samples = qkernel_cfg.get("max_samples", 1500)
     C = qkernel_cfg.get("C", 1.0)
-    kernel_workers = qkernel_cfg.get("kernel_workers") or os.cpu_count() or 1
+
+    # --- MODIFICATION ROBUSTE : Vérifier le device RÉELLEMENT utilisé ---
+    
+    # On regarde si le nom du device final contient "gpu" (ex: "lightning.gpu")
+    is_running_on_gpu = "gpu" in device_name.lower()
+
+    if is_running_on_gpu:
+        # CAS 1 : On est vraiment sur GPU -> Pas de multiprocessing (trop de contention/overhead)
+        kernel_workers = 1
+        print(f"[INFO] Backend GPU actif ({device_name}) : 'kernel_workers' forcé à 1 pour la performance.")
+    else:
+        # CAS 2 : On est sur CPU (soit par choix, soit par fallback) -> Multiprocessing activé
+        requested_workers = qkernel_cfg.get("kernel_workers")
+        kernel_workers = requested_workers or os.cpu_count() or 1
+        print(f"[INFO] Backend CPU actif ({device_name}) : Utilisation de {kernel_workers} workers.")
+    
+    # -------------------------------------------------------------------
 
     log_path, log_file = init_logger(log_dir, "svm_qkernel")
+    # ... (suite du code)
+
     write_log(
         log_file,
         f"[QKernel SVM] Dataset: {dataset_name}, wires: {n_wires}, layers: {n_layers}, PCA: {use_pca} ({pca_components}), device: {device_name}, use_gpu: {qkernel_cfg.get('use_gpu', False)}, kernel_workers: {kernel_workers}\n",
