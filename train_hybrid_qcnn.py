@@ -70,7 +70,7 @@ def run_train_hybrid_qcnn(config):
     # --- NEW: SUBSETTING FOR QUANTUM TRAINING ---
     # Select only the first 500 images for faster training
     subset_size = 500 
-    train_dataset = torch.utils.data.Subset(full_train_dataset, indices=range(subset_size))
+    #train_dataset = torch.utils.data.Subset(full_train_dataset, indices=range(subset_size))
 
     print(f"Dataset subset created: {len(train_dataset)} samples (Original: {len(full_train_dataset)})")
     # --------------------------------------------

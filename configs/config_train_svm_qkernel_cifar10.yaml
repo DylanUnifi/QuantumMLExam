@@ -16,7 +16,7 @@ qkernel:
   gpu_device: "lightning.gpu"
   use_gpu: true
   use_pca: true
-  pca_components: 8
+  pca_components: 1
   max_samples: 2000
   C: 1.5
   kernel_workers: 16

@@ -19,7 +19,7 @@ qkernel:
   pca_components: 6
   max_samples: 2000
   C: 2.0
-  kernel_workers: 4
+  kernel_workers: 16
   # --- Nouveaux paramètres pour le kernel semi-apprenable ---
   trainable_kernel: true
   opt_steps: 5
