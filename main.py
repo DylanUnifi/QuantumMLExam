@@ -17,7 +17,12 @@ from train_svm import run_train_svm
 from train_svm_qkernel import run_train_svm_qkernel
 from train_quantum_mlp import run_train_quantum_mlp
 
-import intel_extension_for_pytorch as ipex 
+try:
+    import intel_extension_for_pytorch as ipex
+except ImportError:
+    # L'importation échoue, mais le code continue de fonctionner sur CPU/CUDA
+    print("[INFO] Extension Intel pour PyTorch non trouvée. Le support XPU est désactivé.")
+    ipex = None
 
 def set_seed(seed):
     # 1. Setting seeds for standard libraries (Python, NumPy)

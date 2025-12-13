@@ -2,7 +2,6 @@
 
 import os
 import torch
-import intel_extension_for_pytorch as ipex  # Make sure this is imported!
 import torch.nn as nn
 import torch.optim as optim
 from sklearn.model_selection import KFold
