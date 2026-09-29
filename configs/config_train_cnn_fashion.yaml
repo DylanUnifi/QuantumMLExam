@@ -1,0 +1,22 @@
+experiment_name: cnn_fashion_experiment
+
+dataset:
+  name: "fashion_mnist"
+  binary_classes: [3, 8] 
+
+model:
+  in_channels: 1 
+  hidden_sizes: [512, 256, 128, 64, 32]
+  grayscale: true   
+
+training:
+  batch_size: 128
+  epochs: 15
+  learning_rate: 0.001
+  kfold: 3
+  early_stopping: 5
+  scheduler: "none"                
+
+checkpoint:
+  save_dir: "checkpoints"
+  subdir: "fashion_mnist_cnn"
