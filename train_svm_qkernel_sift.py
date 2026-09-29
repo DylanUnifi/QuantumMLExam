@@ -317,13 +317,16 @@ def run_train_svm_qkernel(config):
                 print("[Warning] No SIFT keypoints found. Returning zeros.")
                 return np.zeros((len(X), n_clusters)), None
             kmeans_model = MiniBatchKMeans(n_clusters=n_clusters, random_state=42, n_init=3)
-            kmeans_model.fit(all_descriptors)
+            # Ensure float64 to prevent Cython typing issues
+            kmeans_model.fit(np.array(all_descriptors, dtype=np.float64))
             
         histograms = np.zeros((len(X), n_clusters))
         for i in range(len(X)):
             desc = image_descriptors[i]
             if desc is not None and kmeans_model is not None:
-                words = kmeans_model.predict(desc)
+                # Ensure float64
+                desc_f64 = np.array(desc, dtype=np.float64)
+                words = kmeans_model.predict(desc_f64)
                 for w in words:
                     histograms[i, w] += 1
                     
